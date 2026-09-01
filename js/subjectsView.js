@@ -54,20 +54,29 @@
 
       const courses = db.getCourses();
       if (courses.length > 0) {
-        this.currentNivel = courses[0].nombre;
+        if (!this.currentNivel) {
+          this.currentNivel = courses[0].nombre;
+        }
         if (this.nivelSelect) {
           this.nivelSelect.value = this.currentNivel;
         }
       }
 
+      this.updateCoursePjBadge();
       this.renderCoursesTable();
       this.renderSubjects();
 
       // Escuchar eventos globales de sincronización
       window.addEventListener('courses_updated', () => {
         this.populateNivelSelects();
+        this.updateCoursePjBadge();
         this.renderCoursesTable();
         this.renderSubjects();
+      });
+
+      window.addEventListener('school_config_updated', () => {
+        this.updateCoursePjBadge();
+        this.renderCoursesTable();
       });
 
       window.addEventListener('subjects_updated', (e) => {
@@ -131,6 +140,7 @@
       if (this.nivelSelect) {
         this.nivelSelect.addEventListener('change', (e) => {
           this.currentNivel = e.target.value;
+          this.updateCoursePjBadge();
           this.renderSubjects();
         });
       }
@@ -177,6 +187,7 @@
         if (this.courseProfesorInput) this.courseProfesorInput.value = '';
         this.currentNivel = created.nombre;
         if (this.nivelSelect) this.nivelSelect.value = created.nombre;
+        this.updateCoursePjBadge();
         window.showToast(`Curso "${created.nombre}" creado exitosamente`, 'success');
       }
     }
@@ -265,6 +276,7 @@
         profesorJefe: nuevoPj.trim()
       });
 
+      this.updateCoursePjBadge();
       window.showToast(`Curso "${cleanNombre}" actualizado correctamente`, 'success');
     }
 
@@ -281,20 +293,55 @@
       }
     }
 
+    updateCoursePjBadge() {
+      if (!this.courseCurrentPjBadge) return;
+
+      if (!this.currentNivel) {
+        this.courseCurrentPjBadge.style.display = 'none';
+        return;
+      }
+
+      const pj = db.getProfesorJefeForCourse(this.currentNivel);
+      const isAssigned = pj && pj.trim() !== '' && pj !== 'Profesor(a) Jefe';
+
+      if (isAssigned) {
+        this.courseCurrentPjBadge.innerHTML = `
+          <span>👨‍🏫 Profesor(a) Jefe: <strong style="color: #166534;">${escapeHtml(pj)}</strong></span>
+          <button type="button" class="btn btn-sm" onclick="window.subjectsView.quickEditCoursePj()" style="padding: 2px 7px; font-size: 0.74rem; margin-left: 6px; background: #dcfce7; border: 1px solid #86efac; color: #166534; cursor: pointer; border-radius: 4px;" title="Cambiar Profesor(a) Jefe de este curso">✏️ Cambiar</button>
+        `;
+        this.courseCurrentPjBadge.style.background = '#f0fdf4';
+        this.courseCurrentPjBadge.style.color = '#166534';
+        this.courseCurrentPjBadge.style.border = '1px solid #bbf7d0';
+      } else {
+        this.courseCurrentPjBadge.innerHTML = `
+          <span>👨‍🏫 Profesor(a) Jefe: <em style="color: #b45309;">No asignado</em></span>
+          <button type="button" class="btn btn-sm" onclick="window.subjectsView.quickEditCoursePj()" style="padding: 2px 7px; font-size: 0.74rem; margin-left: 6px; background: #fef3c7; border: 1px solid #fde68a; color: #b45309; cursor: pointer; border-radius: 4px;" title="Asignar Profesor(a) Jefe titular a este curso">➕ Asignar Docente</button>
+        `;
+        this.courseCurrentPjBadge.style.background = '#fffbeb';
+        this.courseCurrentPjBadge.style.color = '#b45309';
+        this.courseCurrentPjBadge.style.border = '1px solid #fde68a';
+      }
+      this.courseCurrentPjBadge.style.display = 'inline-flex';
+    }
+
+    quickEditCoursePj() {
+      if (!this.currentNivel) return;
+      const currentPj = db.getProfesorJefeForCourse(this.currentNivel);
+      const defaultVal = currentPj && currentPj !== 'Profesor(a) Jefe' ? currentPj : '';
+      const nuevo = prompt(`Asignar Profesor(a) Jefe titular para el curso "${this.currentNivel}":`, defaultVal);
+      if (nuevo === null) return;
+
+      db.saveProfesorJefeForCourse(this.currentNivel, nuevo.trim());
+      this.updateCoursePjBadge();
+      this.renderCoursesTable();
+      window.showToast(`Profesor(a) Jefe de ${this.currentNivel} actualizado a "${nuevo.trim() || 'Sin asignar'}"`, 'success');
+    }
+
     renderSubjects() {
       if (!this.listContainer) return;
 
-      // Actualizar badge del profesor jefe asignado al curso seleccionado
-      const currentCourse = db.getCourseByName(this.currentNivel);
-      if (this.courseCurrentPjBadge) {
-        if (currentCourse && currentCourse.profesorJefe) {
-          this.courseCurrentPjBadge.innerHTML = `👨‍🏫 Profesor(a) Jefe: <strong>${escapeHtml(currentCourse.profesorJefe)}</strong>`;
-          this.courseCurrentPjBadge.style.display = 'inline-block';
-        } else {
-          this.courseCurrentPjBadge.innerHTML = `👨‍🏫 Profesor(a) Jefe: <em style="color: #64748b;">No asignado</em>`;
-          this.courseCurrentPjBadge.style.display = 'inline-block';
-        }
-      }
+      // Actualizar inmediatamente la insignia del profesor jefe asignado
+      this.updateCoursePjBadge();
 
       if (!this.currentNivel) {
         this.listContainer.innerHTML = `

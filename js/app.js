@@ -81,6 +81,7 @@
           window.gradesView.render();
         } else if (targetViewId === 'subjects-view') {
           window.subjectsView.populateNivelSelects();
+          window.subjectsView.updateCoursePjBadge();
           window.subjectsView.renderCoursesTable();
           window.subjectsView.renderSubjects();
         } else if (targetViewId === 'attendance-view') {
