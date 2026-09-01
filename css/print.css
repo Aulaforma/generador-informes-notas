@@ -7,8 +7,8 @@
 
 @media print {
   @page {
-    size: letter portrait;
-    margin: 8mm 12mm 8mm 12mm;
+    size: letter landscape;
+    margin: 4mm 8mm 4mm 8mm;
   }
 
   html, body {
@@ -16,7 +16,7 @@
     padding: 0 !important;
     background: #ffffff !important;
     color: #111827 !important;
-    font-size: 9.5pt !important;
+    font-size: 8.5pt !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -64,11 +64,11 @@
     background: transparent !important;
   }
 
-  /* PÁGINA DEL INFORME (1 por cada alumno) */
+  /* PÁGINA DEL INFORME (1 por cada alumno en Formato Horizontal / Landscape) */
   .report-page {
     width: 100% !important;
-    height: 260mm !important;
-    max-height: 263mm !important;
+    height: 198mm !important;
+    max-height: 202mm !important;
     box-sizing: border-box !important;
     display: flex !important;
     flex-direction: column !important;
@@ -77,8 +77,8 @@
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    padding: 0 4mm 2mm 4mm !important;
-    margin: 0 0 0 0 !important;
+    padding: 0 2mm !important;
+    margin: 0 !important;
     background: #ffffff !important;
     border: none !important;
     overflow: hidden !important;

@@ -1,17 +1,15 @@
 /**
  * js/gradesView.js
- * Módulo de Ingreso de Calificaciones (Vista Docente).
- * Cuadrícula de hasta 40 estudiantes con 12 notas editables y cálculo dinámico de:
- * - Promedio individual (escala numérica o escala conceptual I, S, B, MB)
- * - Identificación de asignaturas que no inciden en el promedio con asterisco (*)
- * - Promedio General del Curso en tiempo real
+ * Módulo de Gestión de Calificaciones Docente con Soporte para 1° y 2° Semestre.
+ * Permite registrar hasta 12 notas por semestre, calculando en tiempo real
+ * los promedios semestrales y el Promedio Final Anual con redondeo oficial MINEDUC.
  */
 
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(require('./db.js'));
+    module.exports = factory(require('./db.js'), require('./seedData.js'));
   } else {
-    root.GradesView = factory(root);
+    root.GradesView = factory(root, root);
   }
 })(typeof self !== 'undefined' ? self : this, function (dbModule) {
 
@@ -29,16 +27,24 @@
       this.subjectSelect = document.getElementById('grades-select-subject');
       this.tableBody = document.getElementById('grades-table-body');
       
-      // KPI Badges
+      // Botones de selección de semestre
+      this.btnSemester1 = document.getElementById('btn-semester-1');
+      this.btnSemester2 = document.getElementById('btn-semester-2');
+      this.thSemAvg = document.getElementById('th-sem-avg');
+
+      // KPI Badges y Footer
       this.kpiCourseAvg = document.getElementById('kpi-course-avg');
+      this.kpiLabelCourseAvg = document.getElementById('kpi-label-course-avg');
       this.kpiEvaluatedCount = document.getElementById('kpi-evaluated-count');
       this.kpiApprovedCount = document.getElementById('kpi-approved-count');
       this.kpiFailedCount = document.getElementById('kpi-failed-count');
       this.footerCourseAvg = document.getElementById('footer-course-avg');
+      this.footerCourseFinalAvg = document.getElementById('footer-course-final-avg');
       this.subjectInfoBanner = document.getElementById('grades-subject-info-banner');
 
       this.currentNivel = '';
       this.currentSubject = '';
+      this.currentSemestre = 1; // 1 o 2
 
       this.init();
     }
@@ -85,8 +91,8 @@
           return;
         }
 
-        this.nivelSelect.innerHTML = courseNames.map(n => 
-          `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`
+        this.nivelSelect.innerHTML = courseNames.map(c => 
+          `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`
         ).join('');
 
         if (this.currentNivel && courseNames.includes(this.currentNivel)) {
@@ -129,18 +135,44 @@
         this.subjectSelect.value = previousSelection;
       } else {
         this.subjectSelect.selectedIndex = 0;
+        this.currentSubject = this.subjectSelect.value;
       }
-      this.currentSubject = this.subjectSelect.value;
     }
 
-    getCurrentSubjectConfig() {
-      if (!this.currentNivel || !this.currentSubject) return null;
-      const list = db.getSubjectsForCourse(this.currentNivel);
-      return list.find(s => s.nombre === this.currentSubject) || {
-        nombre: this.currentSubject,
-        incideEnPromedio: true,
-        esConceptual: isTypicallyConceptual(this.currentSubject)
-      };
+    setSemestre(sem) {
+      this.currentSemestre = Number(sem) || 1;
+
+      if (this.btnSemester1 && this.btnSemester2) {
+        if (this.currentSemestre === 1) {
+          this.btnSemester1.classList.add('active');
+          this.btnSemester1.style.background = '#3b82f6';
+          this.btnSemester1.style.color = 'white';
+
+          this.btnSemester2.classList.remove('active');
+          this.btnSemester2.style.background = '#f8fafc';
+          this.btnSemester2.style.color = '#334155';
+        } else {
+          this.btnSemester2.classList.add('active');
+          this.btnSemester2.style.background = '#ea580c';
+          this.btnSemester2.style.color = 'white';
+
+          this.btnSemester1.classList.remove('active');
+          this.btnSemester1.style.background = '#f8fafc';
+          this.btnSemester1.style.color = '#334155';
+        }
+      }
+
+      if (this.thSemAvg) {
+        this.thSemAvg.textContent = `PROM. ${this.currentSemestre}° SEM`;
+        this.thSemAvg.style.background = this.currentSemestre === 1 ? '#dbeafe' : '#ffedd5';
+        this.thSemAvg.style.color = this.currentSemestre === 1 ? '#1e40af' : '#9a3412';
+      }
+
+      if (this.kpiLabelCourseAvg) {
+        this.kpiLabelCourseAvg.textContent = `Promedio Curso (${this.currentSemestre}° Sem)`;
+      }
+
+      this.render();
     }
 
     initEvents() {
@@ -159,10 +191,23 @@
         });
       }
 
+      // Alternar 1er Semestre y 2do Semestre
+      if (this.btnSemester1) {
+        this.btnSemester1.addEventListener('click', () => {
+          this.setSemestre(1);
+        });
+      }
+
+      if (this.btnSemester2) {
+        this.btnSemester2.addEventListener('click', () => {
+          this.setSemestre(2);
+        });
+      }
+
       if (this.tableBody) {
         this.tableBody.addEventListener('change', (e) => {
           if (e.target.classList.contains('grade-input')) {
-            this.handleGradeChange(e.target);
+            this.handleGradeInput(e.target);
           }
         });
 
@@ -174,30 +219,53 @@
       }
     }
 
+    getCurrentSubjectConfig() {
+      if (!this.currentNivel || !this.currentSubject) return null;
+      const subjects = db.getSubjectsForCourse(this.currentNivel);
+      return subjects.find(s => s.nombre === this.currentSubject) || null;
+    }
+
     render() {
-      if (!this.currentNivel) return;
+      if (!this.tableBody) return;
 
       const subConfig = this.getCurrentSubjectConfig();
-      const isConceptual = subConfig ? subConfig.esConceptual : false;
       const noIncide = subConfig ? subConfig.incideEnPromedio === false : false;
+      const isConceptual = subConfig ? subConfig.esConceptual : isTypicallyConceptual(this.currentSubject);
 
-      // Actualizar banner informativo sobre la asignatura seleccionada
-      this.updateSubjectBanner(subConfig);
+      // Actualizar banner informativo
+      if (this.subjectInfoBanner) {
+        if (this.currentSubject) {
+          const semTag = `<span class="header-badge-tag" style="background: ${this.currentSemestre === 1 ? '#dbeafe' : '#ffedd5'}; color: ${this.currentSemestre === 1 ? '#1e40af' : '#9a3412'}; font-weight: 700;">📅 ${this.currentSemestre}° Semestre Activo</span>`;
+          const codeTag = subConfig && subConfig.codigo ? `<span class="header-badge-tag" style="background: #e2e8f0; color: #1e293b; font-family: monospace; font-weight: 700;">Cód. ${escapeHtml(subConfig.codigo)}</span>` : '';
+          const incideTag = noIncide 
+            ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">⚠️ No incide en promedio final (*)</span>` 
+            : `<span class="header-badge-tag" style="background: #ecfdf5; color: #065f46; font-weight: 600;">✓ Incide en promedio general</span>`;
+          const conceptTag = isConceptual
+            ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I: 1.0-3.9 | S: 4.0-4.9 | B: 5.0-5.9 | MB: 6.0-7.0)</span>`
+            : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 a 7.0)</span>`;
 
-      if (!this.currentSubject) {
+          this.subjectInfoBanner.innerHTML = `
+            ${semTag}
+            ${codeTag}
+            <strong style="color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(this.currentSubject)}${noIncide ? ' *' : ''}</strong>
+            ${incideTag}
+            ${conceptTag}
+          `;
+          this.subjectInfoBanner.style.display = 'flex';
+        } else {
+          this.subjectInfoBanner.style.display = 'none';
+        }
+      }
+
+      if (!this.currentNivel || !this.currentSubject) {
         this.tableBody.innerHTML = `
           <tr>
-            <td colspan="15" style="text-align: center; padding: 2.5rem; color: #64748b;">
-              <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📚</div>
-              <strong>No hay asignaturas configuradas para ${escapeHtml(this.currentNivel)}</strong>
-              <p style="font-size: 0.85rem; margin-top: 0.4rem;">Vaya a la pestaña "📚 Asignaturas por Curso" para escribir las asignaturas que componen el plan de estudios.</p>
-              <button class="btn btn-primary btn-sm" style="margin-top: 0.75rem;" onclick="document.getElementById('tab-btn-subjects').click()">
-                ➕ Configurar Asignaturas de este Curso
-              </button>
+            <td colspan="16" style="text-align: center; padding: 2.5rem; color: #64748b;">
+              <strong>Seleccione un Nivel y una Asignatura para ingresar calificaciones</strong>
             </td>
           </tr>
         `;
-        this.updateKpis([], null, isConceptual);
+        this.updateKpis([], null, null, isConceptual);
         return;
       }
 
@@ -206,26 +274,30 @@
       if (students.length === 0) {
         this.tableBody.innerHTML = `
           <tr>
-            <td colspan="15" style="text-align: center; padding: 2.5rem; color: #64748b;">
+            <td colspan="16" style="text-align: center; padding: 2.5rem; color: #64748b;">
               <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
               <strong>No hay estudiantes matriculados en ${escapeHtml(this.currentNivel)}</strong>
               <p style="font-size: 0.85rem; margin-top: 0.25rem;">Vaya a la pestaña de "Matrícula" para inscribir estudiantes o hacer carga masiva.</p>
             </td>
           </tr>
         `;
-        this.updateKpis([], null, isConceptual);
+        this.updateKpis([], null, null, isConceptual);
         return;
       }
 
       let evaluatedStudentAverages = [];
 
       const rowsHtml = students.map((std, index) => {
-        const gradeRecord = db.getGradesForStudentAndSubject(std.id, this.currentSubject);
+        // Obtener calificaciones del semestre activo
+        const gradeRecord = db.getGradesForStudentAndSubject(std.id, this.currentSubject, this.currentSemestre);
         const notes = (gradeRecord && gradeRecord.notes) ? gradeRecord.notes : Array(12).fill(null);
-        const studentAvg = (gradeRecord && gradeRecord.promedio !== null && gradeRecord.promedio !== undefined) ? gradeRecord.promedio : null;
+        const studentSemAvg = (gradeRecord && gradeRecord.promedio !== null && gradeRecord.promedio !== undefined) ? gradeRecord.promedio : null;
 
-        if (studentAvg !== null) {
-          evaluatedStudentAverages.push(studentAvg);
+        // Obtener promedio final anual proyectado (combinando 1S y 2S)
+        const finalObj = db.getStudentSubjectFinalGrade(std.id, this.currentSubject);
+
+        if (studentSemAvg !== null) {
+          evaluatedStudentAverages.push(studentSemAvg);
         }
 
         const cellsHtml = Array.from({ length: 12 }).map((_, cIdx) => {
@@ -250,21 +322,40 @@
           `;
         }).join('');
 
-        let avgDisplayHtml = '-';
-        let avgColor = '#64748b';
+        // Formato para el promedio del semestre activo
+        let avgSemDisplayHtml = '-';
+        let avgSemColor = '#64748b';
 
-        if (studentAvg !== null) {
+        if (studentSemAvg !== null) {
           if (isConceptual) {
-            const concept = convertToConcept(studentAvg);
+            const concept = convertToConcept(studentSemAvg);
             const conceptColor = concept === 'I' ? '#dc2626' : (concept === 'MB' ? '#1e40af' : '#059669');
-            avgColor = conceptColor;
-            avgDisplayHtml = `
+            avgSemColor = conceptColor;
+            avgSemDisplayHtml = `
               <strong style="font-size: 1.15rem; color: ${conceptColor};">${concept}</strong>
-              <span style="font-size: 0.72rem; display: block; color: #64748b;">(${formatGrade(studentAvg)})</span>
+              <span style="font-size: 0.72rem; display: block; color: #64748b;">(${formatGrade(studentSemAvg)})</span>
             `;
           } else {
-            avgColor = studentAvg < 4.0 ? '#dc2626' : '#1e40af';
-            avgDisplayHtml = formatGrade(studentAvg);
+            avgSemColor = studentSemAvg < 4.0 ? '#dc2626' : '#1e40af';
+            avgSemDisplayHtml = formatGrade(studentSemAvg);
+          }
+        }
+
+        // Formato para el promedio final anual
+        let avgFinalDisplayHtml = '-';
+        let avgFinalColor = '#64748b';
+
+        if (finalObj.promedioFinal !== null) {
+          if (isConceptual) {
+            const concept = convertToConcept(finalObj.promedioFinal);
+            const conceptColor = concept === 'I' ? '#dc2626' : (concept === 'MB' ? '#1e40af' : '#059669');
+            avgFinalColor = conceptColor;
+            avgFinalDisplayHtml = `
+              <strong style="font-size: 1.15rem; color: ${conceptColor};">${concept}</strong>
+            `;
+          } else {
+            avgFinalColor = finalObj.promedioFinal < 4.0 ? '#dc2626' : '#1e40af';
+            avgFinalDisplayHtml = formatGrade(finalObj.promedioFinal);
           }
         }
 
@@ -276,8 +367,11 @@
               <span style="color: #475569;">${escapeHtml(std.nombres)}</span>
             </td>
             ${cellsHtml}
-            <td class="col-avg-cell" id="avg-cell-${std.id}" style="color: ${avgColor};">
-              ${avgDisplayHtml}
+            <td class="col-avg-cell" id="avg-cell-${std.id}" style="color: ${avgSemColor}; background: ${this.currentSemestre === 1 ? '#eff6ff' : '#fff7ed'}; font-weight: 800;">
+              ${avgSemDisplayHtml}
+            </td>
+            <td class="col-avg-cell" id="final-cell-${std.id}" style="color: ${avgFinalColor}; background: #f8fafc; font-weight: 800; border-left: 2px solid #cbd5e1;">
+              ${avgFinalDisplayHtml}
             </td>
           </tr>
         `;
@@ -285,38 +379,56 @@
 
       this.tableBody.innerHTML = rowsHtml;
 
-      const courseSubjectAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject);
-      this.updateKpis(evaluatedStudentAverages, courseSubjectAvg, isConceptual);
+      const courseSemAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject, this.currentSemestre);
+      const courseFinalAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject, 'anual');
+      this.updateKpis(evaluatedStudentAverages, courseSemAvg, courseFinalAvg, isConceptual);
     }
 
-    updateSubjectBanner(subConfig) {
-      if (!this.subjectInfoBanner) return;
+    updateKpis(studentAverages, courseSemAvg, courseFinalAvg, isConceptual) {
+      const evaluatedCount = studentAverages.length;
+      let approvedCount = 0;
+      let failedCount = 0;
 
-      if (!subConfig) {
-        this.subjectInfoBanner.style.display = 'none';
-        return;
+      studentAverages.forEach(avg => {
+        if (avg >= 4.0) approvedCount++;
+        else failedCount++;
+      });
+
+      if (this.kpiCourseAvg) {
+        if (courseSemAvg !== null) {
+          if (isConceptual) {
+            const concept = convertToConcept(courseSemAvg);
+            this.kpiCourseAvg.innerHTML = `${concept} <span style="font-size: 0.85rem; font-weight: 500;">(${formatGrade(courseSemAvg)})</span>`;
+          } else {
+            this.kpiCourseAvg.textContent = formatGrade(courseSemAvg);
+          }
+        } else {
+          this.kpiCourseAvg.textContent = '-';
+        }
       }
 
-      const noIncide = subConfig.incideEnPromedio === false;
-      const isConceptual = subConfig.esConceptual;
+      if (this.kpiEvaluatedCount) this.kpiEvaluatedCount.textContent = evaluatedCount;
+      if (this.kpiApprovedCount) this.kpiApprovedCount.textContent = approvedCount;
+      if (this.kpiFailedCount) this.kpiFailedCount.textContent = failedCount;
 
-      let html = '';
-      if (noIncide) {
-        html += `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700; margin-right: 0.5rem;">⚠️ Asignatura con Asterisco (*)</span> <span>Esta asignatura <strong>no incide</strong> en el cálculo del Promedio General del estudiante.</span> `;
-      }
-      if (isConceptual) {
-        html += `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700; margin-left: 0.5rem; margin-right: 0.5rem;">✨ Escala Conceptual</span> <span>Las notas pasan automáticamente a conceptos: <strong>MB</strong> (6,0-7,0 Muy Bien), <strong>B</strong> (5,0-5,9 Bien), <strong>S</strong> (4,0-4,9 Suficiente), <strong>I</strong> (1,0-3,9 Insuficiente).</span>`;
+      if (this.footerCourseAvg) {
+        if (courseSemAvg !== null) {
+          this.footerCourseAvg.textContent = isConceptual ? convertToConcept(courseSemAvg) : formatGrade(courseSemAvg);
+        } else {
+          this.footerCourseAvg.textContent = '-';
+        }
       }
 
-      if (html) {
-        this.subjectInfoBanner.innerHTML = html;
-        this.subjectInfoBanner.style.display = 'flex';
-      } else {
-        this.subjectInfoBanner.style.display = 'none';
+      if (this.footerCourseFinalAvg) {
+        if (courseFinalAvg !== null) {
+          this.footerCourseFinalAvg.textContent = isConceptual ? convertToConcept(courseFinalAvg) : formatGrade(courseFinalAvg);
+        } else {
+          this.footerCourseFinalAvg.textContent = '-';
+        }
       }
     }
 
-    handleGradeChange(inputEl) {
+    handleGradeInput(inputEl) {
       const rawValue = inputEl.value.trim();
       const studentId = inputEl.getAttribute('data-student-id');
       const colIndex = parseInt(inputEl.getAttribute('data-col-index'), 10);
@@ -356,15 +468,16 @@
         inputEl.classList.remove('is-red', 'is-blue');
       }
 
-      const currentRecord = db.getGradesForStudentAndSubject(studentId, this.currentSubject);
+      // Guardar nota en el semestre activo
+      const currentRecord = db.getGradesForStudentAndSubject(studentId, this.currentSubject, this.currentSemestre);
       let notes = (currentRecord && currentRecord.notes) ? [...currentRecord.notes] : Array(12).fill(null);
       while (notes.length < 12) notes.push(null);
 
       notes[colIndex] = parsedVal;
 
-      const updated = db.saveStudentGrades(studentId, this.currentSubject, notes);
+      const updated = db.saveStudentGrades(studentId, this.currentSubject, notes, this.currentSemestre);
 
-      // Actualizar celda de promedio individual
+      // Actualizar celda de promedio del semestre activo
       const avgCell = document.getElementById(`avg-cell-${studentId}`);
       if (avgCell) {
         if (updated.promedio !== null) {
@@ -386,13 +499,35 @@
         }
       }
 
-      const courseAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject);
+      // Actualizar celda de promedio final anual
+      const finalObj = db.getStudentSubjectFinalGrade(studentId, this.currentSubject);
+      const finalCell = document.getElementById(`final-cell-${studentId}`);
+      if (finalCell) {
+        if (finalObj.promedioFinal !== null) {
+          if (isConceptual) {
+            const concept = convertToConcept(finalObj.promedioFinal);
+            const conceptColor = concept === 'I' ? '#dc2626' : (concept === 'MB' ? '#1e40af' : '#059669');
+            finalCell.style.color = conceptColor;
+            finalCell.innerHTML = `<strong style="font-size: 1.15rem; color: ${conceptColor};">${concept}</strong>`;
+          } else {
+            finalCell.style.color = finalObj.promedioFinal < 4.0 ? '#dc2626' : '#1e40af';
+            finalCell.textContent = formatGrade(finalObj.promedioFinal);
+          }
+        } else {
+          finalCell.textContent = '-';
+          finalCell.style.color = '#64748b';
+        }
+      }
+
+      // Actualizar promedios globales de curso
+      const courseSemAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject, this.currentSemestre);
+      const courseFinalAvg = db.getCourseSubjectAverage(this.currentNivel, this.currentSubject, 'anual');
       const students = db.getStudents(this.currentNivel);
       const evaluatedAverages = students
-        .map(s => db.getGradesForStudentAndSubject(s.id, this.currentSubject)?.promedio)
+        .map(s => db.getGradesForStudentAndSubject(s.id, this.currentSubject, this.currentSemestre)?.promedio)
         .filter(p => p !== null && p !== undefined);
 
-      this.updateKpis(evaluatedAverages, courseAvg, isConceptual);
+      this.updateKpis(evaluatedAverages, courseSemAvg, courseFinalAvg, isConceptual);
     }
 
     handleGridNavigation(e) {
@@ -423,37 +558,6 @@
           if (prevInput) { prevInput.focus(); prevInput.select(); e.preventDefault(); }
         }
       }
-    }
-
-    updateKpis(evaluatedList, courseAvg, isConceptual = false) {
-      let formattedAvg = '-';
-
-      if (courseAvg !== null) {
-        if (isConceptual) {
-          formattedAvg = `${convertToConcept(courseAvg)} (${formatGrade(courseAvg)})`;
-        } else {
-          formattedAvg = formatGrade(courseAvg);
-        }
-      }
-      
-      if (this.kpiCourseAvg) {
-        this.kpiCourseAvg.textContent = formattedAvg;
-        this.kpiCourseAvg.style.color = courseAvg !== null ? (courseAvg < 4.0 ? '#dc2626' : '#1e3a8a') : '#64748b';
-      }
-
-      if (this.footerCourseAvg) {
-        this.footerCourseAvg.textContent = formattedAvg;
-      }
-
-      if (this.kpiEvaluatedCount) {
-        this.kpiEvaluatedCount.textContent = evaluatedList.length;
-      }
-
-      const approved = evaluatedList.filter(p => p >= 4.0).length;
-      const failed = evaluatedList.filter(p => p < 4.0).length;
-
-      if (this.kpiApprovedCount) this.kpiApprovedCount.textContent = approved;
-      if (this.kpiFailedCount) this.kpiFailedCount.textContent = failed;
     }
   }
 

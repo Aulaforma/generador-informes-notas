@@ -78,14 +78,26 @@
             <h2>📝 Cuadrícula de Ingreso de Calificaciones</h2>
             <p>Seleccione Nivel y Asignatura para registrar notas (1 a 12). El sistema calcula el promedio de asignatura y el Promedio General del Curso en tiempo real.</p>
           </div>
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <div class="form-group" style="min-width: 220px;">
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="min-width: 200px;">
               <label for="grades-select-nivel">Nivel / Curso:</label>
               <select id="grades-select-nivel" class="form-control"></select>
             </div>
-            <div class="form-group" style="min-width: 280px;">
+            <div class="form-group" style="min-width: 250px;">
               <label for="grades-select-subject">Asignatura:</label>
               <select id="grades-select-subject" class="form-control"></select>
+            </div>
+            <!-- SELECTOR DE SEMESTRE (1° Y 2° SEMESTRE) -->
+            <div class="form-group" style="min-width: 220px;">
+              <label>Período / Semestre:</label>
+              <div class="semester-toggle-group" style="display: flex; height: 38px; border: 1.5px solid #3b82f6; border-radius: var(--radius-sm); overflow: hidden;">
+                <button type="button" class="btn btn-sm btn-semester-toggle active" id="btn-semester-1" data-semester="1" style="flex: 1; border-radius: 0; font-weight: 700; background: #3b82f6; color: white; border: none; cursor: pointer;">
+                  📘 1° Semestre
+                </button>
+                <button type="button" class="btn btn-sm btn-semester-toggle" id="btn-semester-2" data-semester="2" style="flex: 1; border-radius: 0; font-weight: 700; background: #f8fafc; color: #334155; border: none; cursor: pointer;">
+                  📙 2° Semestre
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -95,7 +107,7 @@
           <div class="stat-card" style="border-left: 4px solid var(--primary);">
             <div class="stat-icon blue">📊</div>
             <div class="stat-content">
-              <div class="stat-label">Promedio General Curso</div>
+              <div class="stat-label" id="kpi-label-course-avg">Promedio Curso (1° Sem)</div>
               <div class="stat-value" id="kpi-course-avg">-</div>
             </div>
           </div>
@@ -124,14 +136,14 @@
 
         <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.6rem 0.9rem; margin-bottom: 0.75rem; font-size: 0.84rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
           <span>💡</span>
-          <span><strong>Regla de Redondeo Oficial:</strong> Los promedios se calculan aritméticamente y se aproximan en el segundo decimal (ejemplo: 6,57 = 6,6; 6,44 = 6,4). Use <strong>Enter</strong>, <strong>Tab</strong> o las <strong>Flechas</strong> para desplazarse rápidamente.</span>
+          <span><strong>Evaluación Semestral Oficial:</strong> Registre calificaciones para 1° y 2° Semestre de forma independiente. El sistema calcula los promedios semestrales y el <strong>Promedio Final Anual</strong> aplicando la aproximación oficial MINEDUC.</span>
         </div>
 
         <!-- BANNER INFORMATIVO DE ASIGNATURA SELECCIONADA -->
         <div id="grades-subject-info-banner" style="display: none; padding: 0.65rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.85rem; background: #fffbeb; border: 1px solid #fde68a; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
         </div>
 
-        <!-- CUADRÍCULA DE CALIFICACIONES (HASTA 40 ALUMNOS) -->
+        <!-- CUADRÍCULA DE CALIFICACIONES -->
         <div class="table-responsive-wrapper">
           <table class="grades-grid-table">
             <thead>
@@ -150,7 +162,8 @@
                 <th class="col-grade">N10</th>
                 <th class="col-grade">N11</th>
                 <th class="col-grade">N12</th>
-                <th class="col-avg">PROMEDIO</th>
+                <th class="col-avg" id="th-sem-avg" style="background: #dbeafe; color: #1e40af;">PROM. 1° SEM</th>
+                <th class="col-avg" style="background: #1e3a8a; color: white;" title="Promedio Final Anual (1° y 2° Semestre)">PROM. FINAL</th>
               </tr>
             </thead>
             <tbody id="grades-table-body">
@@ -159,9 +172,12 @@
             <tfoot>
               <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
                 <td colspan="14" style="text-align: right; padding: 0.75rem 1rem; color: #1e3a8a;">
-                  PROMEDIO GENERAL DEL CURSO (EN ESTA ASIGNATURA):
+                  PROMEDIO GENERAL DEL CURSO EN ESTA ASIGNATURA:
                 </td>
                 <td id="footer-course-avg" style="text-align: center; font-size: 1.05rem; font-weight: 800; color: #1e3a8a; background: #e0e7ff;">
+                  -
+                </td>
+                <td id="footer-course-final-avg" style="text-align: center; font-size: 1.05rem; font-weight: 800; color: white; background: #1e3a8a;">
                   -
                 </td>
               </tr>

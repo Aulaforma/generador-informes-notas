@@ -569,7 +569,7 @@
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { deletedId: id } }));
     }
 
-    // --- CALIFICACIONES (12 NOTAS POR ASIGNATURA) ---
+    // --- CALIFICACIONES (1ER Y 2DO SEMESTRE + PROMEDIO ANUAL) ---
     getAllGrades() {
       try {
         return JSON.parse(localStorage.getItem(DB_KEYS.GRADES)) || [];
@@ -578,20 +578,25 @@
       }
     }
 
-    getGradesByStudent(studentId) {
-      return this.getAllGrades().filter(g => g.studentId === studentId);
+    getGradesByStudent(studentId, semestre = null) {
+      const all = this.getAllGrades().filter(g => g.studentId === studentId);
+      if (semestre === null) return all;
+      const semNum = Number(semestre);
+      return all.filter(g => Number(g.semestre || 1) === semNum);
     }
 
-    getGradesForStudentAndSubject(studentId, subject) {
+    getGradesForStudentAndSubject(studentId, subject, semestre = 1) {
       const all = this.getAllGrades();
-      return all.find(g => g.studentId === studentId && g.subject === subject) || null;
+      const semNum = Number(semestre) || 1;
+      return all.find(g => g.studentId === studentId && g.subject === subject && Number(g.semestre || 1) === semNum) || null;
     }
 
-    saveStudentGrades(studentId, subject, notesArray) {
+    saveStudentGrades(studentId, subject, notesArray, semestre = 1) {
       const allGrades = this.getAllGrades();
-      const idx = allGrades.findIndex(g => g.studentId === studentId && g.subject === subject);
+      const semNum = Number(semestre) || 1;
+      const idx = allGrades.findIndex(g => g.studentId === studentId && g.subject === subject && Number(g.semestre || 1) === semNum);
 
-      // Calcular promedio del alumno en la asignatura
+      // Calcular promedio del alumno en la asignatura para el semestre
       const validNotes = notesArray
         .map(n => (n !== null && n !== undefined && n !== '' ? parseFloat(String(n).replace(',', '.')) : null))
         .filter(n => n !== null && !isNaN(n) && n >= 1.0 && n <= 7.0);
@@ -607,6 +612,7 @@
         id: idx !== -1 ? allGrades[idx].id : 'grd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         studentId,
         subject,
+        semestre: semNum,
         notes: notesArray,
         promedio
       };
@@ -621,25 +627,62 @@
       return record;
     }
 
+    /**
+     * Obtiene el desglose completo de notas del estudiante en una asignatura:
+     * 1er Semestre, 2do Semestre y Promedio Final Anual según la regla oficial de redondeo MINEDUC.
+     */
+    getStudentSubjectFinalGrade(studentId, subject) {
+      const g1 = this.getGradesForStudentAndSubject(studentId, subject, 1);
+      const g2 = this.getGradesForStudentAndSubject(studentId, subject, 2);
+
+      const p1 = g1 && g1.promedio !== null && !isNaN(g1.promedio) ? g1.promedio : null;
+      const p2 = g2 && g2.promedio !== null && !isNaN(g2.promedio) ? g2.promedio : null;
+
+      let promedioFinal = null;
+      if (p1 !== null && p2 !== null) {
+        promedioFinal = roundToChileanGrade((p1 + p2) / 2);
+      } else if (p1 !== null) {
+        promedioFinal = p1;
+      } else if (p2 !== null) {
+        promedioFinal = p2;
+      }
+
+      return {
+        notes1: g1 ? g1.notes : [],
+        promedio1S: p1,
+        notes2: g2 ? g2.notes : [],
+        promedio2S: p2,
+        promedioFinal
+      };
+    }
+
     deleteGradesByStudent(studentId) {
       const filtered = this.getAllGrades().filter(g => g.studentId !== studentId);
       localStorage.setItem(DB_KEYS.GRADES, JSON.stringify(filtered));
     }
 
     /**
-     * Calcula dinámicamente el Promedio General del Curso para una asignatura específica:
-     * Suma de los promedios individuales dividida por la cantidad de alumnos evaluados.
+     * Calcula dinámicamente el Promedio General del Curso para una asignatura:
+     * Soporta '1' (1er Semestre), '2' (2do Semestre) o 'anual' (Promedio Final de Curso).
      */
-    getCourseSubjectAverage(nivel, subject) {
+    getCourseSubjectAverage(nivel, subject, periodo = 'anual') {
       const students = this.getStudents(nivel);
       if (!students || students.length === 0) return null;
 
-      const studentIds = new Set(students.map(s => s.id));
-      const allGrades = this.getAllGrades().filter(g => studentIds.has(g.studentId) && g.subject === subject);
+      const promediosConNota = [];
 
-      const promediosConNota = allGrades
-        .map(g => g.promedio)
-        .filter(p => p !== null && !isNaN(p));
+      students.forEach(std => {
+        if (periodo === 1 || periodo === '1') {
+          const g = this.getGradesForStudentAndSubject(std.id, subject, 1);
+          if (g && g.promedio !== null && !isNaN(g.promedio)) promediosConNota.push(g.promedio);
+        } else if (periodo === 2 || periodo === '2') {
+          const g = this.getGradesForStudentAndSubject(std.id, subject, 2);
+          if (g && g.promedio !== null && !isNaN(g.promedio)) promediosConNota.push(g.promedio);
+        } else {
+          const res = this.getStudentSubjectFinalGrade(std.id, subject);
+          if (res.promedioFinal !== null && !isNaN(res.promedioFinal)) promediosConNota.push(res.promedioFinal);
+        }
+      });
 
       if (promediosConNota.length === 0) return null;
 
@@ -650,39 +693,45 @@
 
     /**
      * Calcula el Promedio General del Estudiante:
+     * Soporta:
+     * - periodo: 1 -> Promedio General 1° Semestre
+     * - periodo: 2 -> Promedio General 2° Semestre
+     * - periodo: 'anual' -> Promedio General Anual Acumulado
      * REGLA CLAVE: Solo considera asignaturas que INCIDEN en el promedio final (incideEnPromedio: true)
      * y que utilizan escala numérica (no conceptuales como Orientación o Religión).
      */
-    getStudentGeneralAverage(studentId) {
+    getStudentGeneralAverage(studentId, periodo = 'anual') {
       const student = this.getStudentById(studentId);
       if (!student) return null;
 
       const courseSubjects = this.getSubjectsForCourse(student.nivel);
       // Mapa de asignaturas que inciden en el promedio
-      const incidentSubjectsMap = new Map();
-      
-      if (courseSubjects && courseSubjects.length > 0) {
-        courseSubjects.forEach(s => {
-          // Solo incide si incideEnPromedio !== false y no es conceptual
-          if (s.incideEnPromedio !== false && !s.esConceptual) {
-            incidentSubjectsMap.set(s.nombre, true);
+      const incidentSubjects = courseSubjects.filter(s => s.incideEnPromedio !== false && !s.esConceptual);
+
+      const promedios = [];
+
+      if (incidentSubjects.length > 0) {
+        incidentSubjects.forEach(sub => {
+          if (periodo === 1 || periodo === '1') {
+            const g = this.getGradesForStudentAndSubject(studentId, sub.nombre, 1);
+            if (g && g.promedio !== null && !isNaN(g.promedio)) promedios.push(g.promedio);
+          } else if (periodo === 2 || periodo === '2') {
+            const g = this.getGradesForStudentAndSubject(studentId, sub.nombre, 2);
+            if (g && g.promedio !== null && !isNaN(g.promedio)) promedios.push(g.promedio);
+          } else {
+            const res = this.getStudentSubjectFinalGrade(studentId, sub.nombre);
+            if (res.promedioFinal !== null && !isNaN(res.promedioFinal)) promedios.push(res.promedioFinal);
+          }
+        });
+      } else {
+        // Si aún no hay asignaturas configuradas, usar registros existentes excluyendo conceptuales
+        const studentGrades = this.getGradesByStudent(studentId, (periodo === 1 || periodo === 2) ? periodo : null);
+        studentGrades.forEach(g => {
+          if (!isTypicallyConceptual(g.subject) && g.promedio !== null && !isNaN(g.promedio)) {
+            promedios.push(g.promedio);
           }
         });
       }
-
-      const studentGrades = this.getGradesByStudent(studentId);
-      
-      const promedios = studentGrades
-        .filter(g => {
-          // Si hay configuración de curso, verificar que incida
-          if (incidentSubjectsMap.size > 0) {
-            return incidentSubjectsMap.has(g.subject);
-          }
-          // Si no hay configuración de curso aún, excluir las típicamente conceptuales
-          return !isTypicallyConceptual(g.subject);
-        })
-        .map(g => g.promedio)
-        .filter(p => p !== null && !isNaN(p));
 
       if (promedios.length === 0) return null;
       const sum = promedios.reduce((acc, val) => acc + val, 0);

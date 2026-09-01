@@ -193,7 +193,15 @@
           }
         }
 
-        db.saveStudentGrades(std.id, asig, notas);
+        db.saveStudentGrades(std.id, asig, notas, 1);
+
+        // Generar también calificaciones de demostración para el 2do Semestre
+        const notasSem2 = notas.map(n => {
+          if (n === null) return null;
+          const delta = ((idx + aIdx) % 3 === 0) ? 0.2 : (((idx + aIdx) % 3 === 1) ? -0.2 : 0.1);
+          return Math.min(7.0, Math.max(3.8, Math.round((n + delta) * 10) / 10));
+        });
+        db.saveStudentGrades(std.id, asig, notasSem2, 2);
       });
     });
   }
