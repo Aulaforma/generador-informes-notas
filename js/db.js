@@ -173,6 +173,30 @@
     return clean.includes('orientacion') || clean.includes('religion');
   }
 
+  /**
+   * Normaliza nombres de cursos para comparaciones robustas e insensibles a mayúsculas,
+   * tildes, caracteres ordinales (°/º) y formatos numéricos (ej: 2do medio / segundo medio).
+   */
+  function normalizeCourseString(str) {
+    if (!str) return '';
+    let s = String(str)
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[°º]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    s = s.replace(/\b1ro\b|\b1er\b|\b1\b/g, 'primero');
+    s = s.replace(/\b2do\b|\b2\b/g, 'segundo');
+    s = s.replace(/\b3ro\b|\b3er\b|\b3\b/g, 'tercero');
+    s = s.replace(/\b4to\b|\b4\b/g, 'cuarto');
+    s = s.replace(/\b5to\b|\b5\b/g, 'quinto');
+    s = s.replace(/\b6to\b|\b6\b/g, 'sexto');
+    s = s.replace(/\b7mo\b|\b7\b/g, 'septimo');
+    s = s.replace(/\b8vo\b|\b8\b/g, 'octavo');
+    return s;
+  }
+
   class EducationalDB {
     constructor() {
       this.init();
