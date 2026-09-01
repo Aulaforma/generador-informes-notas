@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#1e40af" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- External Shield Outline -->
+  <path d="M100 8 C155 8 188 35 188 80 C188 155 135 205 100 232 C65 205 12 155 12 80 C12 35 45 8 100 8 Z" 
+        fill="url(#shieldGrad)" stroke="url(#goldGrad)" stroke-width="6" filter="url(#dropShadow)" />
+
+  <!-- Inner Gold Border -->
+  <path d="M100 18 C148 18 178 42 178 82 C178 148 130 194 100 218 C70 194 22 148 22 82 C22 42 52 18 100 18 Z" 
+        fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="4 2" />
+
+  <!-- Crown / Upper Accent -->
+  <g transform="translate(100, 48) scale(0.9)">
+    <!-- Open Book -->
+    <path d="M-40 0 C-20 -10 -5 5 0 15 C5 5 20 -10 40 0 L36 38 C18 28 5 32 0 40 C-5 32 -18 28 -36 38 Z" 
+          fill="#ffffff" stroke="#1e3a8a" stroke-width="2" />
+    <path d="M0 15 L0 40" stroke="#1e3a8a" stroke-width="2" />
+    <!-- Torch of Knowledge -->
+    <path d="M-8 -15 L8 -15 L4 5 L-4 5 Z" fill="url(#goldGrad)" />
+    <!-- Flame -->
+    <path d="M0 -38 C8 -28 12 -22 6 -15 C3 -10 -3 -10 -6 -15 C-12 -22 -8 -28 0 -38 Z" fill="#ef4444" />
+    <path d="M0 -32 C4 -24 6 -20 3 -15 C1 -12 -1 -12 -3 -15 C-6 -20 -4 -24 0 -32 Z" fill="#f59e0b" />
+  </g>
+
+  <!-- Stars -->
+  <polygon points="100,105 103,113 111,113 105,118 107,126 100,121 93,126 95,118 89,113 97,113" fill="url(#goldGrad)"/>
+  <polygon points="65,115 67,121 73,121 68,125 70,131 65,127 60,131 62,125 57,121 63,121" fill="url(#goldGrad)"/>
+  <polygon points="135,115 137,121 143,121 138,125 140,131 135,127 130,131 132,125 127,121 133,121" fill="url(#goldGrad)"/>
+
+  <!-- Ribbon and School Initials -->
+  <rect x="35" y="145" width="130" height="26" rx="6" fill="#ffffff" stroke="url(#goldGrad)" stroke-width="2" />
+  <text x="100" y="163" font-family="'Outfit', 'Segoe UI', Arial, sans-serif" font-weight="900" font-size="14" 
+        fill="#1e3a8a" text-anchor="middle" letter-spacing="2">L.A.A.T.</text>
+
+  <!-- Foundation and Location -->
+  <text x="100" y="185" font-family="'Segoe UI', Arial, sans-serif" font-weight="700" font-size="10" 
+        fill="#f8fafc" text-anchor="middle" letter-spacing="1">TUCAPEL</text>
+  <text x="100" y="199" font-family="'Segoe UI', Arial, sans-serif" font-weight="500" font-size="8.5" 
+        fill="#cbd5e1" text-anchor="middle">CHILE</text>
+</svg>

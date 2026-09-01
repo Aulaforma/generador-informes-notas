@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Gestión Académica e Informes de Calificaciones - Liceo Andrés Alcázar de Tucapel</title>
+  <meta name="description" content="Sistema de gestión escolar, calificaciones con cuadrícula de 12 notas, control de asistencia y generador de informes en PDF tamaño Carta." />
+
+  <!-- Estilos de la aplicación e impresión -->
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./css/print.css" media="print" />
+
+  <!-- html2pdf.js para exportación directa a archivo PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+
+  <!-- CABECERA INSTITUCIONAL SUPERIOR -->
+  <header class="app-header no-print">
+    <div class="header-brand">
+      <img id="app-school-logo" src="./assets/default_badge.svg" alt="Insignia Liceo Andrés Alcázar de Tucapel" class="header-logo-img" />
+      <div class="header-titles">
+        <h1 id="app-school-title">Liceo Andrés Alcázar de Tucapel</h1>
+        <p>
+          <span id="app-school-rbd">RBD: 4580-1</span>
+          <span class="header-badge-tag" id="app-school-year">Año Escolar 2026</span>
+          <span class="header-badge-tag" style="background: rgba(16, 185, 129, 0.2); color: #a7f3d0;">Sistema Activo</span>
+        </p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-reset-demo" title="Recargar estudiantes y notas de ejemplo">
+        🔄 Cargar Datos Demo
+      </button>
+      <button class="btn btn-secondary btn-sm" id="btn-export-backup" title="Descargar copia de seguridad en JSON">
+        💾 Exportar Respaldo
+      </button>
+      <label class="btn btn-secondary btn-sm" style="margin:0; cursor:pointer;" title="Restaurar copia de seguridad">
+        📥 Importar
+        <input type="file" id="input-import-backup" accept=".json" style="display:none;" />
+      </label>
+    </div>
+  </header>
+
+  <!-- BARRA DE NAVEGACIÓN PRINCIPAL -->
+  <nav class="app-navbar no-print">
+    <button class="nav-tab-btn active" data-view="grades-view" id="tab-btn-grades">
+      <span>📝</span> Calificaciones (12 Notas)
+    </button>
+    <button class="nav-tab-btn" data-view="attendance-view" id="tab-btn-attendance">
+      <span>📅</span> Control de Asistencia
+    </button>
+    <button class="nav-tab-btn" data-view="students-view" id="tab-btn-students">
+      <span>👨‍🎓</span> Matrícula de Estudiantes
+    </button>
+    <button class="nav-tab-btn" data-view="reports-view" id="tab-btn-reports">
+      <span>📄</span> Informes y Exportación PDF
+    </button>
+    <button class="nav-tab-btn" data-view="config-view" id="tab-btn-config">
+      <span>🏢</span> Membrete Institucional
+    </button>
+  </nav>
+
+  <!-- CONTENIDO DE LAS VISTAS SPA -->
+  <main class="app-main" id="app-content">
+
+    <!-- 1. VISTA DE CALIFICACIONES (CUADRÍCULA DOCENTE DE 12 NOTAS) -->
+    <section class="view-container active" id="grades-view">
+      <div class="card no-print">
+        <div class="card-header">
+          <div>
+            <h2>📝 Cuadrícula de Ingreso de Calificaciones</h2>
+            <p>Seleccione Nivel y Asignatura para registrar notas (1 a 12). El sistema calcula el promedio de asignatura y el Promedio General del Curso en tiempo real.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <div class="form-group" style="min-width: 220px;">
+              <label for="grades-select-nivel">Nivel / Curso:</label>
+              <select id="grades-select-nivel" class="form-control"></select>
+            </div>
+            <div class="form-group" style="min-width: 280px;">
+              <label for="grades-select-subject">Asignatura:</label>
+              <select id="grades-select-subject" class="form-control"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- TARJETAS DE INDICADORES / PROMEDIO DEL CURSO -->
+        <div class="stats-grid">
+          <div class="stat-card" style="border-left: 4px solid var(--primary);">
+            <div class="stat-icon blue">📊</div>
+            <div class="stat-content">
+              <div class="stat-label">Promedio General Curso</div>
+              <div class="stat-value" id="kpi-course-avg">-</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon blue">👥</div>
+            <div class="stat-content">
+              <div class="stat-label">Alumnos Evaluados</div>
+              <div class="stat-value" id="kpi-evaluated-count">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <div class="stat-content">
+              <div class="stat-label">Aprobados (Nota ≥ 4,0)</div>
+              <div class="stat-value" id="kpi-approved-count" style="color: var(--success);">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon amber">⚠️</div>
+            <div class="stat-content">
+              <div class="stat-label">Insuficientes (&lt; 4,0)</div>
+              <div class="stat-value" id="kpi-failed-count" style="color: var(--danger);">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.6rem 0.9rem; margin-bottom: 1rem; font-size: 0.84rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
+          <span>💡</span>
+          <span><strong>Regla de Redondeo Oficial:</strong> Los promedios se calculan aritméticamente y se aproximan en el segundo decimal (ejemplo: 6,57 = 6,6; 6,44 = 6,4). Use <strong>Enter</strong>, <strong>Tab</strong> o las <strong>Flechas</strong> para desplazarse rápidamente.</span>
+        </div>
+
+        <!-- CUADRÍCULA DE CALIFICACIONES (HASTA 40 ALUMNOS) -->
+        <div class="table-responsive-wrapper">
+          <table class="grades-grid-table">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-student">Estudiante (Orden Alfabético)</th>
+                <th class="col-grade">N1</th>
+                <th class="col-grade">N2</th>
+                <th class="col-grade">N3</th>
+                <th class="col-grade">N4</th>
+                <th class="col-grade">N5</th>
+                <th class="col-grade">N6</th>
+                <th class="col-grade">N7</th>
+                <th class="col-grade">N8</th>
+                <th class="col-grade">N9</th>
+                <th class="col-grade">N10</th>
+                <th class="col-grade">N11</th>
+                <th class="col-grade">N12</th>
+                <th class="col-avg">PROMEDIO</th>
+              </tr>
+            </thead>
+            <tbody id="grades-table-body">
+              <!-- Renderizado dinámico desde gradesView.js -->
+            </tbody>
+            <tfoot>
+              <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
+                <td colspan="14" style="text-align: right; padding: 0.75rem 1rem; color: #1e3a8a;">
+                  PROMEDIO GENERAL DEL CURSO (EN ESTA ASIGNATURA):
+                </td>
+                <td id="footer-course-avg" style="text-align: center; font-size: 1.05rem; font-weight: 800; color: #1e3a8a; background: #e0e7ff;">
+                  -
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. VISTA DE ASISTENCIA (VISTA PROFESOR JEFE) -->
+    <section class="view-container" id="attendance-view">
+      <div class="card no-print">
+        <div class="card-header">
+          <div>
+            <h2>📅 Control y Registro de Asistencia Escolar</h2>
+            <p>Registre los días trabajados en el semestre/año y los días asistidos por cada alumno. El sistema calcula automáticamente el Porcentaje de Asistencia (%).</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
+            <div class="form-group" style="min-width: 220px;">
+              <label for="attendance-select-nivel">Nivel / Curso:</label>
+              <select id="attendance-select-nivel" class="form-control"></select>
+            </div>
+            <div class="form-group" style="width: 140px;">
+              <label for="attendance-global-days">Días Trab. Curso:</label>
+              <input type="number" id="attendance-global-days" class="form-control" value="90" min="1" max="365" />
+            </div>
+            <button class="btn btn-secondary" id="btn-apply-global-days" title="Aplicar días trabajados a todos los alumnos del curso">
+              ⚡ Aplicar a Todos
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI ASISTENCIA -->
+        <div class="stats-grid">
+          <div class="stat-card" style="border-left: 4px solid var(--primary);">
+            <div class="stat-icon blue">📈</div>
+            <div class="stat-content">
+              <div class="stat-label">Asistencia Promedio Curso</div>
+              <div class="stat-value" id="attendance-stat-avg-pct">-</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <div class="stat-content">
+              <div class="stat-label">Conforme (≥ 85%)</div>
+              <div class="stat-value" id="attendance-stat-normal" style="color: var(--success);">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon amber">⚠️</div>
+            <div class="stat-content">
+              <div class="stat-label">En Riesgo (&lt; 85%)</div>
+              <div class="stat-value" id="attendance-stat-risk" style="color: var(--danger);">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive-wrapper">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">#</th>
+                <th style="text-align: left;">Estudiante (Apellidos y Nombres)</th>
+                <th style="width: 160px; text-align: center;">Días Trabajados</th>
+                <th style="width: 160px; text-align: center;">Días Asistidos</th>
+                <th style="width: 160px; text-align: center;">% Asistencia</th>
+                <th style="width: 180px; text-align: center;">Estado Reglamentario</th>
+              </tr>
+            </thead>
+            <tbody id="attendance-table-body">
+              <!-- Renderizado desde attendanceView.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. VISTA DE MATRÍCULA DE ESTUDIANTES -->
+    <section class="view-container" id="students-view">
+      <div class="card no-print">
+        <div class="card-header">
+          <div>
+            <h2>👨‍🎓 Registro de Estudiantes (Matrícula)</h2>
+            <p>Administre la nómina oficial de alumnos con validación de RUT, Dígito Verificador, Nombres, Apellidos y Niveles oficiales.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" id="btn-new-student">
+              ➕ Matricular Nuevo Estudiante
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTROS Y BÚSQUEDA -->
+        <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center;">
+          <div class="form-group" style="min-width: 250px;">
+            <label for="students-filter-nivel">Filtrar por Nivel / Curso:</label>
+            <select id="students-filter-nivel" class="form-control"></select>
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 240px;">
+            <label for="students-search-input">Buscar por Nombre o RUT:</label>
+            <input type="text" id="students-search-input" class="form-control" placeholder="Escriba apellido, nombre o RUT..." />
+          </div>
+          <div style="align-self: flex-end; padding-bottom: 0.4rem;">
+            <span class="header-badge-tag" id="students-count-badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+              0 matriculados
+            </span>
+          </div>
+        </div>
+
+        <div class="table-responsive-wrapper">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">#</th>
+                <th style="width: 140px;">RUT</th>
+                <th>Apellido Paterno</th>
+                <th>Apellido Materno</th>
+                <th>Nombres</th>
+                <th style="width: 200px;">Nivel / Curso</th>
+                <th style="width: 150px; text-align: center;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="students-table-body">
+              <!-- Renderizado desde studentsView.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. VISTA DE GENERACIÓN DE INFORMES Y EXPORTACIÓN PDF -->
+    <section class="view-container" id="reports-view">
+      <div class="card no-print reports-controls-panel">
+        <div class="card-header">
+          <div>
+            <h2>📄 Generador Oficial de Informes de Calificaciones y Asistencia</h2>
+            <p>Consolida membrete institucional, hasta 18 asignaturas con comparativa de curso, resumen de promedio, asistencia y firmas centradas. Formato Carta (Letter) de 1 sola página física por estudiante.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-lg" id="btn-print-reports">
+              🖨️ Imprimir / Guardar en PDF
+            </button>
+            <button class="btn btn-success btn-lg" id="btn-download-pdf">
+              📥 Descargar Archivo PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- CONTROLES DE GENERACIÓN -->
+        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: flex-end;">
+          <div class="form-group">
+            <label>Modalidad de Emisión:</label>
+            <div style="display: flex; gap: 1.25rem; padding: 0.5rem 0;">
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                <input type="radio" name="report-mode" id="report-mode-batch" value="batch" checked />
+                <strong>Por Lote (Curso Completo)</strong>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                <input type="radio" name="report-mode" id="report-mode-single" value="single" />
+                <span>Individual</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="report-select-nivel">Seleccionar Nivel / Curso:</label>
+            <select id="report-select-nivel" class="form-control"></select>
+          </div>
+
+          <div class="form-group" id="report-student-select-group" style="display: none;">
+            <label for="report-select-student">Seleccionar Estudiante:</label>
+            <select id="report-select-student" class="form-control"></select>
+          </div>
+
+          <div class="form-group">
+            <span class="header-badge-tag" id="report-count-badge" style="background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; font-size: 0.85rem; padding: 0.4rem 0.8rem; text-align: center;">
+              Cargando informes...
+            </span>
+          </div>
+        </div>
+
+        <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); font-size: 0.82rem; color: #92400e; display: flex; align-items: center; gap: 0.5rem;">
+          <span>📌</span>
+          <span><strong>Garantía de Formato:</strong> Cada informe está estrictamente calibrado para encajar en <strong>1 sola página física tamaño Carta (Letter)</strong> con membrete, tabla de 18 asignaturas, resumen y bloque de firmas centrado. En exportación por lote se aplica salto de página automático entre estudiantes.</span>
+        </div>
+      </div>
+
+      <!-- CONTENEDOR DE VISTA PREVIA Y RENDERIZADO IMPRESO (TAMAÑO CARTA) -->
+      <div class="report-screen-wrapper">
+        <div id="report-preview-container">
+          <!-- Renderizado dinámico desde reportGenerator.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. VISTA DE CONFIGURACIÓN INSTITUCIONAL (MEMBRETE) -->
+    <section class="view-container" id="config-view">
+      <div class="card no-print">
+        <div class="card-header">
+          <div>
+            <h2>🏢 Configuración Institucional (Membrete de Informes)</h2>
+            <p>Configure los datos oficiales del establecimiento que se inyectan automáticamente en la cabecera (header) de cada informe y en el bloque de firmas.</p>
+          </div>
+        </div>
+
+        <form id="config-form">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column: span 2;">
+              <label for="config-nombre">Nombre Oficial del Establecimiento: <span class="required-star">*</span></label>
+              <input type="text" id="config-nombre" class="form-control" required placeholder="Liceo Andrés Alcázar de Tucapel" />
+              <span class="form-help">Aparecerá en el título principal de todos los informes oficiales.</span>
+            </div>
+
+            <div class="form-group">
+              <label for="config-rbd">RBD (Rol Base de Datos): <span class="required-star">*</span></label>
+              <input type="text" id="config-rbd" class="form-control" required placeholder="4580-1" />
+            </div>
+
+            <div class="form-group">
+              <label for="config-anio">Año Escolar: <span class="required-star">*</span></label>
+              <input type="number" id="config-anio" class="form-control" required min="2020" max="2050" value="2026" />
+            </div>
+
+            <div class="form-group">
+              <label for="config-comuna">Comuna / Ciudad:</label>
+              <input type="text" id="config-comuna" class="form-control" value="Tucapel" />
+            </div>
+
+            <div class="form-group">
+              <label for="config-region">Región:</label>
+              <input type="text" id="config-region" class="form-control" value="Región del Biobío" />
+            </div>
+
+            <div class="form-group">
+              <label for="config-director">Nombre o Cargo de Dirección (Firma Derecha):</label>
+              <input type="text" id="config-director" class="form-control" value="Director(a) Establecimiento" />
+            </div>
+
+            <div class="form-group">
+              <label for="config-profesor-jefe">Texto Firma Profesor(a) Jefe (Firma Izquierda):</label>
+              <input type="text" id="config-profesor-jefe" class="form-control" value="Profesor(a) Jefe" />
+            </div>
+
+            <!-- LOGO / INSIGNIA -->
+            <div class="form-group" style="grid-column: span 2;">
+              <label>Insignia / Logo del Establecimiento:</label>
+              <div style="display: flex; gap: 1.5rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap;">
+                <div style="width: 90px; height: 100px; border: 2px dashed #cbd5e1; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; background: #f8fafc; padding: 4px;">
+                  <img id="config-logo-preview" src="./assets/default_badge.svg" alt="Preview Insignia" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                  <label class="btn btn-secondary btn-sm" style="margin:0; cursor:pointer;">
+                    📁 Subir Nueva Insignia (PNG, JPG, SVG)
+                    <input type="file" id="config-logo-file" accept="image/*" style="display:none;" />
+                  </label>
+                  <button type="button" class="btn btn-secondary btn-sm" id="config-logo-reset">
+                    🔄 Restablecer Insignia Oficial
+                  </button>
+                  <span class="form-help">Se guarda en base64 en la base de datos local y se inyecta automáticamente en el PDF.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary btn-lg">
+              💾 Guardar Configuración Institucional
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL DE REGISTRO / EDICIÓN DE ESTUDIANTE -->
+  <div class="modal-backdrop" id="student-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="student-modal-title">Nuevo Registro de Estudiante</h3>
+        <button type="button" class="modal-close-btn" id="modal-close-btn">&times;</button>
+      </div>
+      <form id="student-form">
+        <div class="modal-body">
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr;">
+            <div class="form-group">
+              <label for="student-rut">RUT (Numérico, sin puntos ni guión): <span class="required-star">*</span></label>
+              <input type="text" id="student-rut" class="form-control" required placeholder="Ej: 21456789" />
+            </div>
+            <div class="form-group">
+              <label for="student-dv">Dígito Verificador: <span class="required-star">*</span></label>
+              <input type="text" id="student-dv" class="form-control" maxlength="1" required placeholder="0-9 o K" style="text-align: center;" />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label for="student-ape-paterno">Apellido Paterno: <span class="required-star">*</span></label>
+            <input type="text" id="student-ape-paterno" class="form-control" required placeholder="Ej: Álvarez" />
+          </div>
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label for="student-ape-materno">Apellido Materno: <span class="required-star">*</span></label>
+            <input type="text" id="student-ape-materno" class="form-control" required placeholder="Ej: Muñoz" />
+          </div>
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label for="student-nombres">Nombres: <span class="required-star">*</span></label>
+            <input type="text" id="student-nombres" class="form-control" required placeholder="Ej: Lucas Mateo" />
+          </div>
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label for="student-nivel">Nivel / Curso: <span class="required-star">*</span></label>
+            <select id="student-nivel" class="form-control" required></select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancelar</button>
+          <button type="submit" class="btn btn-primary">💾 Guardar Estudiante</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
+  <div class="toast-container no-print"></div>
+
+  <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
+  <script src="./js/db.js"></script>
+  <script src="./js/seedData.js"></script>
+  <script src="./js/configView.js"></script>
+  <script src="./js/studentsView.js"></script>
+  <script src="./js/gradesView.js"></script>
+  <script src="./js/attendanceView.js"></script>
+  <script src="./js/reportGenerator.js"></script>
+  <script src="./js/pdfExport.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
