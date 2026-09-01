@@ -1,11 +1,12 @@
 /**
  * js/subjectsView.js
  * Módulo de Gestión de Cursos, Asignación de Profesores Jefe y Asignaturas por Curso.
- * Permite:
+ * Integra:
  * 1. Crear cursos dinámicamente y asignarles su Profesor(a) Jefe titular.
- * 2. Seleccionar cursos en desplegable y agregarles asignaturas personalizadas.
- * 3. Diferenciar asignaturas que no inciden con asterisco (*) y que quedan fuera del promedio general.
- * 4. Configurar escala conceptual (I, S, B, MB) para Orientación, Religión u otras.
+ * 2. Catálogo Oficial SIGE - MINEDUC (Plan Común 110-220, Electivos HC 315-336, Talleres JEC 900-906).
+ * 3. Desplegable para seleccionar e insertar asignaturas oficiales con código o escribir personalizadas.
+ * 4. Diferenciar asignaturas que no inciden con asterisco (*) y que quedan fuera del promedio general.
+ * 5. Configurar escala conceptual (I, S, B, MB) para Orientación, Religión u otras.
  */
 
 (function (root, factory) {
@@ -18,6 +19,7 @@
 
   const db = dbModule.db;
   const isTypicallyConceptual = dbModule.isTypicallyConceptual;
+  const CATALOGO_SIGE = dbModule.CATALOGO_SIGE || [];
 
   class SubjectsView {
     constructor() {
@@ -32,7 +34,9 @@
       // 2. Elementos de Asignaturas por Curso
       this.nivelSelect = document.getElementById('subjects-select-nivel');
       this.courseCurrentPjBadge = document.getElementById('course-current-pj-badge');
+      this.catalogSelect = document.getElementById('subject-catalog-select');
       this.subjectForm = document.getElementById('subject-add-form');
+      this.subjectCodeInput = document.getElementById('subject-input-code');
       this.subjectNameInput = document.getElementById('subject-input-name');
       this.incideCheckbox = document.getElementById('subject-check-incide');
       this.conceptualCheckbox = document.getElementById('subject-check-conceptual');
@@ -49,6 +53,7 @@
     }
 
     init() {
+      this.populateCatalogSelect();
       this.populateNivelSelects();
       this.initEvents();
 
@@ -84,6 +89,28 @@
           this.renderSubjects();
         }
       });
+    }
+
+    populateCatalogSelect() {
+      if (!this.catalogSelect) return;
+
+      const grouped = {};
+      CATALOGO_SIGE.forEach((item, idx) => {
+        if (!grouped[item.categoria]) grouped[item.categoria] = [];
+        grouped[item.categoria].push({ ...item, globalIdx: idx });
+      });
+
+      let html = '<option value="">⚡ Seleccionar desde Catálogo Oficial SIGE - MINEDUC...</option>';
+
+      Object.keys(grouped).forEach(cat => {
+        html += `<optgroup label="${escapeHtml(cat)}">`;
+        grouped[cat].forEach(item => {
+          html += `<option value="${item.globalIdx}">[${item.codigo}] ${escapeHtml(item.nombre)}</option>`;
+        });
+        html += `</optgroup>`;
+      });
+
+      this.catalogSelect.innerHTML = html;
     }
 
     populateNivelSelects() {
@@ -145,7 +172,23 @@
         });
       }
 
-      // 3. Crear nueva asignatura para el curso seleccionado
+      // 3. Selección desde el Catálogo Oficial SIGE
+      if (this.catalogSelect) {
+        this.catalogSelect.addEventListener('change', (e) => {
+          const idxVal = e.target.value;
+          if (idxVal === '') return;
+          const item = CATALOGO_SIGE[parseInt(idxVal, 10)];
+          if (item) {
+            if (this.subjectCodeInput) this.subjectCodeInput.value = item.codigo;
+            if (this.subjectNameInput) this.subjectNameInput.value = item.nombre;
+            if (this.incideCheckbox) this.incideCheckbox.checked = item.incide;
+            if (this.conceptualCheckbox) this.conceptualCheckbox.checked = item.conceptual;
+            window.showToast(`Cargada asignatura oficial: [${item.codigo}] ${item.nombre}`, 'info');
+          }
+        });
+      }
+
+      // 4. Crear nueva asignatura para el curso seleccionado
       if (this.subjectForm) {
         this.subjectForm.addEventListener('submit', (e) => {
           e.preventDefault();
@@ -364,7 +407,7 @@
           <div style="text-align: center; padding: 2.5rem; color: #64748b; background: #f8fafc; border-radius: var(--radius-sm); border: 1.5px dashed #cbd5e1;">
             <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📝</div>
             <strong style="color: #1e3a8a; font-size: 1.05rem;">No hay asignaturas registradas para "${escapeHtml(this.currentNivel)}"</strong>
-            <p style="font-size: 0.85rem; margin-top: 0.35rem;">Escriba el nombre de las asignaturas en el formulario superior para crear el plan de estudios.</p>
+            <p style="font-size: 0.85rem; margin-top: 0.35rem;">Seleccione una asignatura del catálogo oficial SIGE superior o escriba el nombre para crear el plan de estudios.</p>
           </div>
         `;
         return;
@@ -382,6 +425,10 @@
           ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I, S, B, MB)</span>`
           : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 - 7.0)</span>`;
 
+        const codeBadge = sub.codigo
+          ? `<span class="header-badge-tag" style="background: #e2e8f0; color: #1e293b; font-family: monospace; font-weight: 700; font-size: 0.8rem; border: 1px solid #cbd5e1;">Cód. ${escapeHtml(sub.codigo)}</span>`
+          : '';
+
         const displayName = noIncide ? `${sub.nombre} *` : sub.nombre;
 
         return `
@@ -389,8 +436,9 @@
             <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1;">
               <div style="font-weight: 700; color: #64748b; width: 28px; text-align: center;">${idx + 1}</div>
               <div>
-                <div style="font-size: 1.02rem; font-weight: 700; color: #0f172a;">
-                  ${escapeHtml(displayName)}
+                <div style="font-size: 1.02rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+                  ${codeBadge}
+                  <span>${escapeHtml(displayName)}</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap;">
                   ${incideBadge}
@@ -399,7 +447,7 @@
               </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
               <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.moveSubject('${sub.id}', -1)" ${idx === 0 ? 'disabled' : ''} title="Subir posición">
                 ⬆️
               </button>
@@ -429,9 +477,11 @@
         return;
       }
 
+      const codigo = this.subjectCodeInput ? this.subjectCodeInput.value.trim() : '';
       const name = this.subjectNameInput ? this.subjectNameInput.value.trim() : '';
+
       if (!name) {
-        window.showToast('Escriba el nombre de la asignatura', 'warning');
+        window.showToast('Escriba o seleccione el nombre de la asignatura', 'warning');
         return;
       }
 
@@ -439,16 +489,19 @@
       const conceptual = this.conceptualCheckbox ? this.conceptualCheckbox.checked : false;
 
       db.saveSubjectForCourse(this.currentNivel, {
+        codigo,
         nombre: name,
         incideEnPromedio: incide,
         esConceptual: conceptual
       });
 
+      if (this.subjectCodeInput) this.subjectCodeInput.value = '';
       if (this.subjectNameInput) this.subjectNameInput.value = '';
+      if (this.catalogSelect) this.catalogSelect.value = '';
       if (this.incideCheckbox) this.incideCheckbox.checked = true;
       if (this.conceptualCheckbox) this.conceptualCheckbox.checked = false;
 
-      window.showToast(`Asignatura "${name}" agregada a ${this.currentNivel}`, 'success');
+      window.showToast(`Asignatura "${name}" ${codigo ? `(Cód. ${codigo}) ` : ''}agregada a ${this.currentNivel}`, 'success');
       this.renderSubjects();
     }
 

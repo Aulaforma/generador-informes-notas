@@ -202,7 +202,9 @@
         return `
           <tr>
             <td class="center" style="width: 24px; color: #64748b; font-size: 7.5pt;">${index + 1}</td>
-            <td style="font-weight: 500; font-size: 8.2pt;">${escapeHtml(subjectDisplayName)}</td>
+            <td style="font-weight: 500; font-size: 8.2pt;">
+              ${sub.codigo ? `<span style="font-family: monospace; font-size: 7.2pt; color: #475569; font-weight: 700; margin-right: 4px;">[${escapeHtml(sub.codigo)}]</span>` : ''}${escapeHtml(subjectDisplayName)}
+            </td>
             <td class="center grade-val ${gradeClass}" style="width: 80px; font-weight: 700;">${finalGradeDisplay}</td>
             <td class="center" style="width: 100px; color: #334155; font-weight: 600;">${courseGradeDisplay}</td>
           </tr>

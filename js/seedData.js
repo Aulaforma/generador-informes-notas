@@ -115,17 +115,17 @@
 
     // Configurar asignaturas iniciales de demostración para Primero Básico A
     const p1CourseSubjects = [
-      { nombre: 'Lenguaje y Comunicación', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Ciencias Naturales', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Música', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Orientación', incideEnPromedio: false, esConceptual: true }, // No incide (*), conceptual (I, S, B, MB)
-      { nombre: 'Religión', incideEnPromedio: false, esConceptual: true }      // No incide (*), conceptual (I, S, B, MB)
+      { codigo: '120', nombre: 'Lenguaje y Comunicación', incideEnPromedio: true, esConceptual: false },
+      { codigo: '130', nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+      { codigo: '140', nombre: 'Ciencias Naturales', incideEnPromedio: true, esConceptual: false },
+      { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+      { codigo: '110', nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
+      { codigo: '180', nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+      { codigo: '160', nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
+      { codigo: '170', nombre: 'Música', incideEnPromedio: true, esConceptual: false },
+      { codigo: '190', nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
+      { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true }, // No incide (*), conceptual (I, S, B, MB)
+      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }      // No incide (*), conceptual (I, S, B, MB)
     ];
 
     p1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Básico A', s));
@@ -135,19 +135,19 @@
 
     // Configurar asignaturas iniciales para Primero Medio A
     const m1CourseSubjects = [
-      { nombre: 'Lengua y Literatura', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Biología', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Física', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Química', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Inglés', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Música', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
-      { nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
-      { nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
+      { codigo: '120', nombre: 'Lengua y Literatura', incideEnPromedio: true, esConceptual: false },
+      { codigo: '130', nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+      { codigo: '141', nombre: 'Biología', incideEnPromedio: true, esConceptual: false },
+      { codigo: '142', nombre: 'Física', incideEnPromedio: true, esConceptual: false },
+      { codigo: '143', nombre: 'Química', incideEnPromedio: true, esConceptual: false },
+      { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+      { codigo: '110', nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
+      { codigo: '180', nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+      { codigo: '160', nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
+      { codigo: '170', nombre: 'Música', incideEnPromedio: true, esConceptual: false },
+      { codigo: '190', nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
+      { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
+      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
     ];
 
     m1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Medio A', s));

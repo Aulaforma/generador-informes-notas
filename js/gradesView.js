@@ -114,12 +114,13 @@
       const previousSelection = this.currentSubject;
 
       this.subjectSelect.innerHTML = courseSubjects.map(s => {
+        const tagCode = s.codigo ? `[${s.codigo}] ` : '';
         const noIncide = s.incideEnPromedio === false;
         const conceptual = s.esConceptual || isTypicallyConceptual(s.nombre);
         const tagIncide = noIncide ? ' (* No incide)' : '';
         const tagConcept = conceptual ? ' [Conceptos I-S-B-MB]' : '';
-        const label = `${s.nombre}${tagIncide}${tagConcept}`;
-        return `<option value="${escapeHtml(s.nombre)}">${label}</option>`;
+        const label = `${tagCode}${s.nombre}${tagIncide}${tagConcept}`;
+        return `<option value="${escapeHtml(s.nombre)}">${escapeHtml(label)}</option>`;
       }).join('');
 
       // Mantener selección anterior si sigue existiendo
