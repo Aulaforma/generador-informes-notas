@@ -453,22 +453,61 @@
             return;
           }
 
+          // Soporta tanto archivos clásicos .xls (BIFF8) como .xlsx y .csv
           const workbook = window.XLSX.read(data, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
           
-          // Convertir a JSON
-          const rawRows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+          // Leer hoja como matriz de filas (header: 1) para detectar dinámicamente la fila de encabezados
+          const sheetMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
 
-          if (!rawRows || rawRows.length === 0) {
+          if (!sheetMatrix || sheetMatrix.length === 0) {
             window.showToast('La planilla está vacía o no contiene filas con datos', 'warning');
+            return;
+          }
+
+          // Detectar dinámicamente qué fila contiene los encabezados (soporta archivos SIGE con membretes iniciales)
+          let headerRowIdx = 0;
+          for (let r = 0; r < Math.min(sheetMatrix.length, 15); r++) {
+            const rowArr = sheetMatrix[r];
+            if (!Array.isArray(rowArr)) continue;
+            const rowStr = rowArr.map(c => this.normalizeKey(c)).join(' ');
+            if (
+              (rowStr.includes('run') || rowStr.includes('rut')) &&
+              (rowStr.includes('nombre') || rowStr.includes('paterno') || rowStr.includes('grado'))
+            ) {
+              headerRowIdx = r;
+              break;
+            }
+          }
+
+          const headerRow = sheetMatrix[headerRowIdx].map(c => String(c || '').trim());
+          const rawRows = [];
+
+          for (let r = headerRowIdx + 1; r < sheetMatrix.length; r++) {
+            const rowArr = sheetMatrix[r];
+            if (!Array.isArray(rowArr)) continue;
+            // Omitir filas vacías
+            if (rowArr.every(val => String(val || '').trim() === '')) continue;
+
+            const rowObj = {};
+            headerRow.forEach((colName, cIdx) => {
+              if (colName) {
+                rowObj[colName] = rowArr[cIdx] !== undefined ? rowArr[cIdx] : '';
+              }
+            });
+            rawRows.push(rowObj);
+          }
+
+          if (rawRows.length === 0) {
+            window.showToast('No se detectaron registros de estudiantes debajo de los encabezados', 'warning');
             return;
           }
 
           this.parseAndPreviewRows(rawRows);
         } catch (err) {
           console.error('Error al procesar archivo Excel:', err);
-          window.showToast('No se pudo leer el archivo Excel. Asegúrese de que sea un .xlsx o .csv válido.', 'danger');
+          window.showToast('No se pudo leer el archivo Excel (.xls / .xlsx). Verifique el formato.', 'danger');
         }
       };
 
@@ -489,80 +528,114 @@
       const clean = String(rawNivel).trim().toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-      // 1. Coincidencia exacta insensible a tildes/mayúsculas
-      for (const nivel of NIVELES_DISPONIBLES) {
-        const nClean = nivel.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        if (clean === nClean) return nivel;
+      // 0. Si ya coincide exactamente con un curso creado en el sistema
+      const existingCourses = db.getCourses();
+      for (const c of existingCourses) {
+        const cClean = c.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (clean === cClean) return c.nombre;
       }
 
-      // 2. Coincidencias de abreviaciones comunes:
-      // "1 basico a" -> "Primero Básico A"
-      const mapping = [
-        { patterns: ['transicion 1', 'prekinder', 'pre-kinder', 'pk'], target: 'Transición 1' },
-        { patterns: ['transicion 2', 'kinder', 'k'], target: 'Transición 2' },
-        { patterns: ['1 basico a', '1° basico a', '1ro basico a', '1ba'], target: 'Primero Básico A' },
-        { patterns: ['1 basico b', '1° basico b', '1ro basico b', '1bb'], target: 'Primero Básico B' },
-        { patterns: ['2 basico a', '2° basico a', '2do basico a', '2ba'], target: 'Segundo Básico A' },
-        { patterns: ['2 basico b', '2° basico b', '2do basico b', '2bb'], target: 'Segundo Básico B' },
-        { patterns: ['3 basico a', '3° basico a', '3ro basico a', '3ba'], target: 'Tercero Básico A' },
-        { patterns: ['3 basico b', '3° basico b', '3ro basico b', '3bb'], target: 'Tercero Básico B' },
-        { patterns: ['4 basico a', '4° basico a', '4to basico a', '4ba'], target: 'Cuarto Básico A' },
-        { patterns: ['4 basico b', '4° basico b', '4to basico b', '4bb'], target: 'Cuarto Básico B' },
-        { patterns: ['5 basico a', '5° basico a', '5to basico a', '5ba'], target: 'Quinto Básico A' },
-        { patterns: ['5 basico b', '5° basico b', '5to basico b', '5bb'], target: 'Quinto Básico B' },
-        { patterns: ['6 basico a', '6° basico a', '6to basico a', '6ba'], target: 'Sexto Básico A' },
-        { patterns: ['6 basico b', '6° basico b', '6to basico b', '6bb'], target: 'Sexto Básico B' },
-        { patterns: ['7 basico a', '7° basico a', '7mo basico a', '7ba'], target: 'Séptimo Básico A' },
-        { patterns: ['7 basico b', '7° basico b', '7mo basico b', '7bb'], target: 'Séptimo Básico B' },
-        { patterns: ['8 basico a', '8° basico a', '8vo basico a', '8ba'], target: 'Octavo Básico A' },
-        { patterns: ['8 basico b', '8° basico b', '8vo basico b', '8bb'], target: 'Octavo Básico B' },
-        { patterns: ['1 medio a', '1° medio a', '1ro medio a', '1ma'], target: 'Primero Medio A' },
-        { patterns: ['1 medio b', '1° medio b', '1ro medio b', '1mb'], target: 'Primero Medio B' },
-        { patterns: ['2 medio a', '2° medio a', '2do medio a', '2ma'], target: 'Segundo Medio A' },
-        { patterns: ['2 medio b', '2° medio b', '2do medio b', '2mb'], target: 'Segundo Medio B' },
-        { patterns: ['3 medio a', '3° medio a', '3ro medio a', '3ma'], target: 'Tercero Medio A' },
-        { patterns: ['3 medio b', '3° medio b', '3ro medio b', '3mb'], target: 'Tercero Medio B' },
-        { patterns: ['4 medio a', '4° medio a', '4to medio a', '4ma'], target: 'Cuarto Medio A' },
-        { patterns: ['4 medio b', '4° medio b', '4to medio b', '4mb'], target: 'Cuarto Medio B' },
-        { patterns: ['laboral', 'curso laboral'], target: 'Curso Laboral' }
+      // Detectar letra del curso (A, B, C...)
+      let letra = '';
+      const matchLetra = clean.match(/\b([a-z])\b/i) || clean.match(/\s+([a-z])$/i);
+      if (matchLetra) {
+        letra = matchLetra[1].toUpperCase();
+      }
+
+      // 1. Transición 1 / Pre-kinder
+      if (clean.includes('1er nivel de transicion') || clean.includes('primer nivel de transicion') || clean.includes('transicion 1') || clean.includes('prekinder') || clean.includes('pre-kinder') || clean.includes('pk')) {
+        const optionWithLetter = `Transición 1 ${letra || 'A'}`;
+        const optionSimple = 'Transición 1';
+        if (existingCourses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
+        if (existingCourses.some(c => c.nombre === optionSimple)) return optionSimple;
+        return letra && letra !== 'A' ? `Transición 1 ${letra}` : 'Transición 1';
+      }
+
+      // 2. Transición 2 / Kinder
+      if (clean.includes('2 nivel de transicion') || clean.includes('segundo nivel de transicion') || clean.includes('transicion 2') || clean.includes('kinder') || clean.includes(' k')) {
+        const optionWithLetter = `Transición 2 ${letra || 'A'}`;
+        const optionSimple = 'Transición 2';
+        if (existingCourses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
+        if (existingCourses.some(c => c.nombre === optionSimple)) return optionSimple;
+        return letra && letra !== 'A' ? `Transición 2 ${letra}` : 'Transición 2';
+      }
+
+      // 3. Enseñanza Básica (1° a 8°)
+      const basicas = [
+        { name: 'Primero Básico', words: ['1 basico', '1ro basico', 'primero basico', '1ba', '1bb'] },
+        { name: 'Segundo Básico', words: ['2 basico', '2do basico', 'segundo basico', '2ba', '2bb'] },
+        { name: 'Tercero Básico', words: ['3 basico', '3ro basico', 'tercero basico', '3ba', '3bb'] },
+        { name: 'Cuarto Básico', words: ['4 basico', '4to basico', 'cuarto basico', '4ba', '4bb'] },
+        { name: 'Quinto Básico', words: ['5 basico', '5to basico', 'quinto basico', '5ba', '5bb'] },
+        { name: 'Sexto Básico', words: ['6 basico', '6to basico', 'sexto basico', '6ba', '6bb'] },
+        { name: 'Séptimo Básico', words: ['7 basico', '7mo basico', 'septimo basico', '7ba', '7bb'] },
+        { name: 'Octavo Básico', words: ['8 basico', '8vo basico', 'octavo basico', '8ba', '8bb'] }
       ];
 
-      for (const m of mapping) {
-        for (const p of m.patterns) {
-          if (clean.includes(p)) return m.target;
+      for (const b of basicas) {
+        if (b.words.some(w => clean.includes(w))) {
+          const l = letra || (clean.includes(' b') || clean.endsWith('b') ? 'B' : 'A');
+          return `${b.name} ${l}`;
         }
       }
 
-      return null;
+      // 4. Enseñanza Media (1° a 4°)
+      const medias = [
+        { name: 'Primero Medio', words: ['1 medio', '1ro medio', 'primero medio', '1ma', '1mb'] },
+        { name: 'Segundo Medio', words: ['2 medio', '2do medio', 'segundo medio', '2ma', '2mb'] },
+        { name: 'Tercero Medio', words: ['3 medio', '3ro medio', 'tercero medio', '3ma', '3mb'] },
+        { name: 'Cuarto Medio', words: ['4 medio', '4to medio', 'cuarto medio', '4ma', '4mb'] }
+      ];
+
+      for (const m of medias) {
+        if (m.words.some(w => clean.includes(w))) {
+          const l = letra || (clean.includes(' b') || clean.endsWith('b') ? 'B' : 'A');
+          return `${m.name} ${l}`;
+        }
+      }
+
+      // 5. Curso Laboral
+      if (clean.includes('laboral')) {
+        return 'Curso Laboral';
+      }
+
+      // 6. Si no coincide con un estándar previo pero tiene texto, usar el nombre original
+      return rawNivel.trim();
     }
 
     parseAndPreviewRows(rawRows) {
       this.parsedStudentsToImport = [];
 
       rawRows.forEach((row, idx) => {
-        // Mapeo inteligente de encabezados de columna
+        // Mapeo inteligente de encabezados de columna oficiales SIGE y variantes
         let rutRaw = '';
         let dvRaw = '';
         let apePaterno = '';
         let apeMaterno = '';
         let nombres = '';
         let nivelRaw = '';
+        let descGradoRaw = '';
+        let letraCursoRaw = '';
 
         for (const [key, val] of Object.entries(row)) {
           const normKey = this.normalizeKey(key);
-          const strVal = String(val).trim();
+          const strVal = String(val !== undefined && val !== null ? val : '').trim();
 
-          if (['rut', 'run', 'cedula', 'identificacion'].includes(normKey)) {
+          if (['run', 'rut', 'cedula', 'identificacion', 'runalumno', 'rutalumno'].includes(normKey)) {
             rutRaw = strVal;
-          } else if (['dv', 'digito', 'digitoverificador', 'dvrun'].includes(normKey)) {
+          } else if (['digitover', 'digitoverificador', 'dv', 'digito', 'dvrun', 'digitoverificadorrun'].includes(normKey) || normKey.startsWith('digitover')) {
             dvRaw = strVal;
-          } else if (['apellidopaterno', 'paterno', 'apaterno', 'primerapellido'].includes(normKey)) {
+          } else if (['apellidopaterno', 'paterno', 'apaterno', 'primerapellido'].includes(normKey) || normKey.startsWith('apellidopat')) {
             apePaterno = strVal;
-          } else if (['apellidomaterno', 'materno', 'amaterno', 'segundoapellido'].includes(normKey)) {
+          } else if (['apellidomaterno', 'materno', 'amaterno', 'segundoapellido'].includes(normKey) || normKey.startsWith('apellidomat')) {
             apeMaterno = strVal;
-          } else if (['nombres', 'nombre', 'primernombre'].includes(normKey)) {
+          } else if (['nombres', 'nombre', 'primernombre', 'nombresdelalumno', 'nombrealumno'].includes(normKey)) {
             nombres = strVal;
-          } else if (['nivel', 'curso', 'grado'].includes(normKey)) {
+          } else if (normKey.startsWith('descgrado') || ['grado', 'descripciongrado', 'glosagrado'].includes(normKey)) {
+            descGradoRaw = strVal;
+          } else if (normKey.startsWith('letra') || ['letracurso', 'letraacurso', 'paralelo'].includes(normKey)) {
+            letraCursoRaw = strVal;
+          } else if (['nivel', 'curso'].includes(normKey)) {
             nivelRaw = strVal;
           } else if (['apellidos'].includes(normKey) && !apePaterno) {
             // Si viene una sola columna de apellidos
@@ -582,26 +655,49 @@
           }
         }
 
-        // Extracción de RUT y DV si vienen juntos (ej. 24.518.293-K o 24518293-K)
+        // Combinar 'Desc Grado' y 'Letra Curso' si vienen en columnas separadas (SIGE oficial)
+        if (descGradoRaw) {
+          if (letraCursoRaw) {
+            nivelRaw = `${descGradoRaw} ${letraCursoRaw}`;
+          } else {
+            nivelRaw = descGradoRaw;
+          }
+        }
+
+        // Extracción robusta de RUT y Dígito Verificador (soporta "27581654 K", "27509561-3", etc.)
         let cleanRutNum = null;
         let finalDv = '';
 
         if (rutRaw) {
-          const cleanStr = rutRaw.replace(/\./g, '').replace(/\s+/g, '');
+          const cleanStr = rutRaw.replace(/\./g, '').trim();
+
+          // Caso A: Formato con guión (ej: "27581654-K" o "27581654-3")
           if (cleanStr.includes('-')) {
             const parts = cleanStr.split('-');
             cleanRutNum = parseInt(parts[0].replace(/[^0-9]/g, ''), 10);
             finalDv = parts[1].trim().toUpperCase();
-          } else {
-            // Solo dígitos
+          } 
+          // Caso B: El RUN trae adherido el DV al final (ej: "27581654 K", "27549612 K", "27581654K")
+          else if (/^([0-9]{7,9})\s*([0-9kK])$/i.test(cleanStr)) {
+            const match = cleanStr.match(/^([0-9]{7,9})\s*([0-9kK])$/i);
+            cleanRutNum = parseInt(match[1], 10);
+            finalDv = match[2].toUpperCase();
+          } 
+          // Caso C: Solo dígitos en la columna RUN (ej: "27509561")
+          else {
             const digits = cleanStr.replace(/[^0-9]/g, '');
             if (digits.length >= 7) {
               cleanRutNum = parseInt(digits, 10);
-              finalDv = dvRaw ? dvRaw.trim().toUpperCase() : calculateDV(cleanRutNum);
             }
           }
         }
 
+        // Si la columna "Dígito Ver." tiene valor válido, la usamos o confirmamos
+        if (dvRaw && dvRaw.trim()) {
+          finalDv = dvRaw.trim().toUpperCase();
+        }
+
+        // Si aún no tenemos DV y el RUT numérico es válido, calcularlo con Módulo 11 oficial
         if (!finalDv && cleanRutNum) {
           finalDv = calculateDV(cleanRutNum);
         }
@@ -610,11 +706,10 @@
 
         // Validación de fila
         const errors = [];
-        if (!cleanRutNum || isNaN(cleanRutNum)) errors.push('RUT no numérico o vacío');
+        if (!cleanRutNum || isNaN(cleanRutNum)) errors.push('RUN no numérico o vacío');
         if (!finalDv) errors.push('Falta Dígito Verificador');
         if (!nombres) errors.push('Falta Nombre');
         if (!apePaterno) errors.push('Falta Ap. Paterno');
-        if (!apeMaterno) errors.push('Falta Ap. Materno');
         if (!matchedNivel) errors.push(`Nivel "${nivelRaw || 'vacío'}" no reconocido`);
 
         const isValid = errors.length === 0;
@@ -624,7 +719,7 @@
           rut: cleanRutNum,
           dv: finalDv,
           apellidoPaterno: apePaterno,
-          apellidoMaterno: apeMaterno,
+          apellidoMaterno: apeMaterno || '',
           nombres: nombres,
           nivel: matchedNivel || nivelRaw,
           rawNivel: nivelRaw,
@@ -688,10 +783,17 @@
       }
 
       const mode = this.importModeSelect ? this.importModeSelect.value : 'merge';
+      const cursosAfectados = new Set(validStudents.map(s => s.nivel));
+
+      // Asegurar que todos los cursos presentes en el archivo existan en la base de datos
+      cursosAfectados.forEach(nivel => {
+        if (!db.getCourseByName(nivel)) {
+          db.saveCourse({ nombre: nivel });
+        }
+      });
 
       // Si la modalidad es "replace_course", eliminamos primero los alumnos de los cursos presentes
       if (mode === 'replace_course') {
-        const cursosAfectados = new Set(validStudents.map(s => s.nivel));
         cursosAfectados.forEach(nivel => {
           const currentInCourse = db.getStudents(nivel);
           currentInCourse.forEach(std => db.deleteStudent(std.id));
