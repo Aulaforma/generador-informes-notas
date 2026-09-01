@@ -77,6 +77,18 @@
       profesorJefe: 'Profesor(a) Jefe'
     });
 
+    // Crear cursos iniciales con sus Profesores Jefe asignados
+    db.saveCourse({
+      id: 'cur_p1a',
+      nombre: 'Primero Básico A',
+      profesorJefe: 'Prof. Carmen Gloria Muñoz'
+    });
+    db.saveCourse({
+      id: 'cur_m1a',
+      nombre: 'Primero Medio A',
+      profesorJefe: 'Prof. Alejandro Valenzuela'
+    });
+
     // Matricular estudiantes en Primero Básico A
     const p1Students = SAMPLE_STUDENTS_P1.map(st => {
       return db.saveStudent({

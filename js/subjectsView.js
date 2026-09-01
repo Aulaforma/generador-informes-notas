@@ -1,10 +1,11 @@
 /**
  * js/subjectsView.js
- * Módulo de Gestión de Asignaturas por Curso.
- * Permite al usuario escribir y configurar las asignaturas de cada nivel:
- * - Define cuáles inciden en el promedio final y cuáles no (diferenciadas con asterisco *).
- * - Define cuáles se evalúan con conceptos (I, S, B, MB para Orientación, Religiones, etc.).
- * - Permite ordenar, editar, eliminar y copiar el plan de asignaturas entre cursos.
+ * Módulo de Gestión de Cursos, Asignación de Profesores Jefe y Asignaturas por Curso.
+ * Permite:
+ * 1. Crear cursos dinámicamente y asignarles su Profesor(a) Jefe titular.
+ * 2. Seleccionar cursos en desplegable y agregarles asignaturas personalizadas.
+ * 3. Diferenciar asignaturas que no inciden con asterisco (*) y que quedan fuera del promedio general.
+ * 4. Configurar escala conceptual (I, S, B, MB) para Orientación, Religión u otras.
  */
 
 (function (root, factory) {
@@ -16,14 +17,23 @@
 })(typeof self !== 'undefined' ? self : this, function (dbModule) {
 
   const db = dbModule.db;
-  const NIVELES_DISPONIBLES = dbModule.NIVELES_DISPONIBLES;
   const isTypicallyConceptual = dbModule.isTypicallyConceptual;
 
   class SubjectsView {
     constructor() {
+      // 1. Elementos de Creación y Gestión de Cursos
+      this.courseForm = document.getElementById('course-add-form');
+      this.courseNameInput = document.getElementById('course-input-name');
+      this.courseProfesorInput = document.getElementById('course-input-profesor');
+      this.coursesTableBody = document.getElementById('courses-table-body');
+      this.coursesTotalBadge = document.getElementById('courses-total-badge');
+      this.btnLoadOfficialCatalog = document.getElementById('btn-load-official-catalog');
+
+      // 2. Elementos de Asignaturas por Curso
       this.nivelSelect = document.getElementById('subjects-select-nivel');
-      this.form = document.getElementById('subject-add-form');
-      this.nameInput = document.getElementById('subject-input-name');
+      this.courseCurrentPjBadge = document.getElementById('course-current-pj-badge');
+      this.subjectForm = document.getElementById('subject-add-form');
+      this.subjectNameInput = document.getElementById('subject-input-name');
       this.incideCheckbox = document.getElementById('subject-check-incide');
       this.conceptualCheckbox = document.getElementById('subject-check-conceptual');
       this.listContainer = document.getElementById('subjects-list-container');
@@ -42,67 +52,259 @@
       this.populateNivelSelects();
       this.initEvents();
 
-      if (this.nivelSelect && this.nivelSelect.options.length > 0) {
-        // Seleccionar 'Primero Básico A' por defecto
-        const p1 = Array.from(this.nivelSelect.options).find(o => o.value === 'Primero Básico A');
-        if (p1) {
-          this.nivelSelect.value = 'Primero Básico A';
-        } else {
-          this.nivelSelect.selectedIndex = 0;
+      const courses = db.getCourses();
+      if (courses.length > 0) {
+        this.currentNivel = courses[0].nombre;
+        if (this.nivelSelect) {
+          this.nivelSelect.value = this.currentNivel;
         }
-        this.currentNivel = this.nivelSelect.value;
       }
 
-      this.render();
+      this.renderCoursesTable();
+      this.renderSubjects();
+
+      // Escuchar eventos globales de sincronización
+      window.addEventListener('courses_updated', () => {
+        this.populateNivelSelects();
+        this.renderCoursesTable();
+        this.renderSubjects();
+      });
 
       window.addEventListener('subjects_updated', (e) => {
         if (!e.detail || !e.detail.nivel || e.detail.nivel === this.currentNivel) {
-          this.render();
+          this.renderSubjects();
         }
       });
     }
 
     populateNivelSelects() {
+      const courses = db.getCourses();
+
       if (this.nivelSelect) {
-        this.nivelSelect.innerHTML = NIVELES_DISPONIBLES.map(n => `<option value="${n}">${n}</option>`).join('');
+        if (courses.length === 0) {
+          this.nivelSelect.innerHTML = '<option value="">(No hay cursos creados)</option>';
+        } else {
+          this.nivelSelect.innerHTML = courses.map(c => 
+            `<option value="${escapeHtml(c.nombre)}">${escapeHtml(c.nombre)}</option>`
+          ).join('');
+
+          if (this.currentNivel && courses.some(c => c.nombre === this.currentNivel)) {
+            this.nivelSelect.value = this.currentNivel;
+          } else if (courses.length > 0) {
+            this.nivelSelect.selectedIndex = 0;
+            this.currentNivel = this.nivelSelect.value;
+          }
+        }
       }
 
       if (this.copyFromSelect) {
-        this.copyFromSelect.innerHTML = '<option value="" disabled selected>Seleccione curso origen...</option>' +
-          NIVELES_DISPONIBLES.map(n => `<option value="${n}">${n}</option>`).join('');
+        if (courses.length === 0) {
+          this.copyFromSelect.innerHTML = '<option value="">(No hay cursos creados)</option>';
+        } else {
+          this.copyFromSelect.innerHTML = courses.map(c => 
+            `<option value="${escapeHtml(c.nombre)}">${escapeHtml(c.nombre)}</option>`
+          ).join('');
+        }
       }
     }
 
     initEvents() {
-      if (this.nivelSelect) {
-        this.nivelSelect.addEventListener('change', (e) => {
-          this.currentNivel = e.target.value;
-          this.render();
+      // 1. Crear nuevo curso
+      if (this.courseForm) {
+        this.courseForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.handleCreateCourse();
         });
       }
 
-      // Auto-detección amigable: si el usuario tipea Orientación o Religión
-      if (this.nameInput && this.conceptualCheckbox && this.incideCheckbox) {
-        this.nameInput.addEventListener('input', (e) => {
-          const val = e.target.value;
-          if (isTypicallyConceptual(val)) {
-            this.conceptualCheckbox.checked = true;
-            this.incideCheckbox.checked = false; // Orientación y Religión por defecto no inciden
+      // Cargar catálogo estándar oficial
+      if (this.btnLoadOfficialCatalog) {
+        this.btnLoadOfficialCatalog.addEventListener('click', () => {
+          if (confirm('¿Desea cargar el catálogo oficial completo de niveles chilenos (Transición a 4° Medio y Laboral)?\nLos cursos que ya existan se conservarán.')) {
+            const total = db.loadOfficialCoursesCatalog();
+            window.showToast(`Catálogo oficial cargado. Total de cursos: ${total}`, 'success');
           }
         });
       }
 
-      if (this.form) {
-        this.form.addEventListener('submit', (e) => this.handleAddSubject(e));
+      // 2. Cambio de curso en el desplegable de asignaturas
+      if (this.nivelSelect) {
+        this.nivelSelect.addEventListener('change', (e) => {
+          this.currentNivel = e.target.value;
+          this.renderSubjects();
+        });
       }
 
+      // 3. Crear nueva asignatura para el curso seleccionado
+      if (this.subjectForm) {
+        this.subjectForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.handleAddSubject();
+        });
+      }
+
+      // Detección inteligente al tipear el nombre de la asignatura (ej: Orientación, Religión)
+      if (this.subjectNameInput) {
+        this.subjectNameInput.addEventListener('input', (e) => {
+          const val = e.target.value.trim();
+          if (isTypicallyConceptual(val)) {
+            if (this.conceptualCheckbox) this.conceptualCheckbox.checked = true;
+            if (this.incideCheckbox) this.incideCheckbox.checked = false; // Religión y Orientación usualmente no inciden
+          }
+        });
+      }
+
+      // Copiar asignaturas desde otro curso
       if (this.btnCopySubjects) {
-        this.btnCopySubjects.addEventListener('click', () => this.handleCopySubjects());
+        this.btnCopySubjects.addEventListener('click', () => {
+          this.handleCopySubjects();
+        });
       }
     }
 
-    render() {
-      if (!this.currentNivel || !this.listContainer) return;
+    handleCreateCourse() {
+      const nombre = this.courseNameInput ? this.courseNameInput.value.trim() : '';
+      const profesorJefe = this.courseProfesorInput ? this.courseProfesorInput.value.trim() : '';
+
+      if (!nombre) {
+        window.showToast('Por favor ingrese el nombre del curso', 'warning');
+        return;
+      }
+
+      const created = db.saveCourse({ nombre, profesorJefe });
+      if (created) {
+        if (this.courseNameInput) this.courseNameInput.value = '';
+        if (this.courseProfesorInput) this.courseProfesorInput.value = '';
+        this.currentNivel = created.nombre;
+        if (this.nivelSelect) this.nivelSelect.value = created.nombre;
+        window.showToast(`Curso "${created.nombre}" creado exitosamente`, 'success');
+      }
+    }
+
+    renderCoursesTable() {
+      if (!this.coursesTableBody) return;
+
+      const courses = db.getCourses();
+      if (this.coursesTotalBadge) {
+        this.coursesTotalBadge.textContent = `${courses.length} cursos registrados`;
+      }
+
+      if (courses.length === 0) {
+        this.coursesTableBody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🏫</div>
+              <strong>No hay cursos registrados</strong>
+              <p style="font-size: 0.85rem; margin-top: 0.25rem;">Cree el primer curso con el formulario superior o cargue el catálogo oficial.</p>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      this.coursesTableBody.innerHTML = courses.map((c, idx) => {
+        const subjectsCount = db.getSubjectsForCourse(c.nombre).length;
+        const studentsCount = db.getStudents(c.nombre).length;
+        const pjDisplay = c.profesorJefe && c.profesorJefe.trim() ? c.profesorJefe.trim() : '<em style="color: #94a3b8;">Sin profesor asignado</em>';
+
+        return `
+          <tr>
+            <td style="text-align: center; color: #64748b; font-weight: 600; width: 40px;">${idx + 1}</td>
+            <td style="width: 250px;">
+              <strong style="color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(c.nombre)}</strong>
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.1rem;">👨‍🏫</span>
+                <span style="font-weight: 500; color: #1e293b;">${pjDisplay}</span>
+              </div>
+            </td>
+            <td style="text-align: center; width: 140px;">
+              <span class="header-badge-tag" style="background: #e0e7ff; color: #3730a3; font-size: 0.8rem;">
+                📚 ${subjectsCount} asignaturas
+              </span>
+            </td>
+            <td style="text-align: center; width: 140px;">
+              <span class="header-badge-tag" style="background: #ecfdf5; color: #065f46; font-size: 0.8rem;">
+                👥 ${studentsCount} alumnos
+              </span>
+            </td>
+            <td style="text-align: center; width: 160px;">
+              <div style="display: flex; gap: 0.4rem; justify-content: center;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.editCourse('${c.id}')" title="Editar curso o profesor jefe">
+                  ✏️ Editar
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="window.subjectsView.deleteCourse('${c.id}', '${escapeHtml(c.nombre)}')" title="Eliminar curso">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    editCourse(courseId) {
+      const course = db.getCourseById(courseId);
+      if (!course) return;
+
+      const nuevoNombre = prompt('Modificar nombre del curso:', course.nombre);
+      if (nuevoNombre === null) return;
+      const cleanNombre = nuevoNombre.trim();
+      if (!cleanNombre) {
+        window.showToast('El nombre no puede estar vacío', 'warning');
+        return;
+      }
+
+      const nuevoPj = prompt(`Asignar Profesor(a) Jefe titular para "${cleanNombre}":`, course.profesorJefe || '');
+      if (nuevoPj === null) return;
+
+      db.saveCourse({
+        id: course.id,
+        nombre: cleanNombre,
+        profesorJefe: nuevoPj.trim()
+      });
+
+      window.showToast(`Curso "${cleanNombre}" actualizado correctamente`, 'success');
+    }
+
+    deleteCourse(courseId, courseName) {
+      const studentsCount = db.getStudents(courseName).length;
+      let msg = `¿Está seguro de eliminar el curso "${courseName}"?`;
+      if (studentsCount > 0) {
+        msg += `\n\nATENCIÓN: Este curso tiene ${studentsCount} estudiante(s) matriculado(s).`;
+      }
+
+      if (confirm(msg)) {
+        db.deleteCourse(courseId);
+        window.showToast(`Curso "${courseName}" eliminado`, 'info');
+      }
+    }
+
+    renderSubjects() {
+      if (!this.listContainer) return;
+
+      // Actualizar badge del profesor jefe asignado al curso seleccionado
+      const currentCourse = db.getCourseByName(this.currentNivel);
+      if (this.courseCurrentPjBadge) {
+        if (currentCourse && currentCourse.profesorJefe) {
+          this.courseCurrentPjBadge.innerHTML = `👨‍🏫 Profesor(a) Jefe: <strong>${escapeHtml(currentCourse.profesorJefe)}</strong>`;
+          this.courseCurrentPjBadge.style.display = 'inline-block';
+        } else {
+          this.courseCurrentPjBadge.innerHTML = `👨‍🏫 Profesor(a) Jefe: <em style="color: #64748b;">No asignado</em>`;
+          this.courseCurrentPjBadge.style.display = 'inline-block';
+        }
+      }
+
+      if (!this.currentNivel) {
+        this.listContainer.innerHTML = `
+          <div style="text-align: center; padding: 2.5rem; color: #64748b; background: #f8fafc; border-radius: var(--radius-sm);">
+            <strong>Seleccione o cree un curso para ver y agregar sus asignaturas</strong>
+          </div>
+        `;
+        if (this.countBadge) this.countBadge.textContent = '0 asignaturas';
+        return;
+      }
 
       const subjects = db.getSubjectsForCourse(this.currentNivel);
 
@@ -112,68 +314,77 @@
 
       if (subjects.length === 0) {
         this.listContainer.innerHTML = `
-          <div style="text-align: center; padding: 3rem 1.5rem; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: var(--radius-md); color: #64748b;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📚</div>
-            <strong style="color: #1e293b; font-size: 1.05rem;">No has registrado asignaturas para ${escapeHtml(this.currentNivel)}</strong>
-            <p style="font-size: 0.88rem; margin-top: 0.4rem; max-width: 500px; margin-left: auto; margin-right: auto;">
-              Escribe el nombre de las asignaturas en el formulario superior para agregarlas a este curso, o utiliza el botón inferior para copiar el plan desde otro nivel.
-            </p>
+          <div style="text-align: center; padding: 2.5rem; color: #64748b; background: #f8fafc; border-radius: var(--radius-sm); border: 1.5px dashed #cbd5e1;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📝</div>
+            <strong style="color: #1e3a8a; font-size: 1.05rem;">No hay asignaturas registradas para "${escapeHtml(this.currentNivel)}"</strong>
+            <p style="font-size: 0.85rem; margin-top: 0.35rem;">Escriba el nombre de las asignaturas en el formulario superior para crear el plan de estudios.</p>
           </div>
         `;
         return;
       }
 
-      this.listContainer.innerHTML = subjects.map((sub, idx) => {
+      const itemsHtml = subjects.map((sub, idx) => {
         const noIncide = sub.incideEnPromedio === false;
-        const displayName = noIncide ? `${escapeHtml(sub.nombre)} *` : escapeHtml(sub.nombre);
+        const conceptual = sub.esConceptual;
 
         const incideBadge = noIncide
-          ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">* No Incide en Promedio</span>`
-          : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;">✓ Incide en Promedio</span>`;
+          ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">⚠️ * No Incide en Promedio</span>`
+          : `<span class="header-badge-tag" style="background: #ecfdf5; color: #065f46; font-weight: 600;">✓ Incide en Promedio</span>`;
 
-        const evalBadge = sub.esConceptual
-          ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff;">Escala Conceptual (I, S, B, MB)</span>`
-          : `<span class="header-badge-tag" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;">Escala Numérica (1.0 - 7.0)</span>`;
+        const conceptBadge = conceptual
+          ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I, S, B, MB)</span>`
+          : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 - 7.0)</span>`;
+
+        const displayName = noIncide ? `${sub.nombre} *` : sub.nombre;
 
         return `
-          <div class="card" style="margin-bottom: 0.65rem; padding: 0.85rem 1.15rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-left: 4px solid ${noIncide ? '#f59e0b' : '#2563eb'};">
+          <div class="card" style="margin-bottom: 0.6rem; padding: 0.8rem 1.1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-left: 4px solid ${noIncide ? '#f59e0b' : '#3b82f6'};">
             <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1;">
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 0.7rem;" onclick="window.subjectsView.moveSubject('${sub.id}', -1)" title="Subir orden" ${idx === 0 ? 'disabled' : ''}>▲</button>
-                <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 0.7rem;" onclick="window.subjectsView.moveSubject('${sub.id}', 1)" title="Bajar orden" ${idx === subjects.length - 1 ? 'disabled' : ''}>▼</button>
-              </div>
-              <span style="font-weight: 700; color: #64748b; width: 24px; text-align: center;">${idx + 1}</span>
+              <div style="font-weight: 700; color: #64748b; width: 28px; text-align: center;">${idx + 1}</div>
               <div>
-                <strong style="font-size: 1rem; color: #0f172a; display: block;">${displayName}</strong>
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap;">
+                <div style="font-size: 1.02rem; font-weight: 700; color: #0f172a;">
+                  ${escapeHtml(displayName)}
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap;">
                   ${incideBadge}
-                  ${evalBadge}
+                  ${conceptBadge}
                 </div>
               </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <button class="btn btn-secondary btn-sm" onclick="window.subjectsView.toggleIncidencia('${sub.id}')" title="Cambiar si incide o no en el promedio final">
-                ${noIncide ? 'Hacer que Incida' : 'Marcar No Incide (*)'}
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.moveSubject('${sub.id}', -1)" ${idx === 0 ? 'disabled' : ''} title="Subir posición">
+                ⬆️
               </button>
-              <button class="btn btn-secondary btn-sm" onclick="window.subjectsView.toggleConceptual('${sub.id}')" title="Cambiar entre escala numérica o conceptual">
-                ${sub.esConceptual ? 'Cambiar a Numérica' : 'Cambiar a Conceptos'}
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.moveSubject('${sub.id}', 1)" ${idx === subjects.length - 1 ? 'disabled' : ''} title="Bajar posición">
+                ⬇️
               </button>
-              <button class="btn btn-danger btn-sm" onclick="window.subjectsView.deleteSubject('${sub.id}')" title="Eliminar asignatura del curso">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.toggleIncide('${sub.id}')" title="Alternar si incide o no en el promedio (*)">
+                ${noIncide ? '✅ Hacer Incidir' : '⚠️ No Incidir (*)'}
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.toggleConceptual('${sub.id}')" title="Alternar escala conceptual (I, S, B, MB)">
+                ${conceptual ? '🔢 Usar Números' : '✨ Usar Conceptos'}
+              </button>
+              <button type="button" class="btn btn-danger btn-sm" onclick="window.subjectsView.deleteSubject('${sub.id}', '${escapeHtml(sub.nombre)}')" title="Eliminar asignatura">
                 🗑️
               </button>
             </div>
           </div>
         `;
       }).join('');
+
+      this.listContainer.innerHTML = itemsHtml;
     }
 
-    handleAddSubject(e) {
-      e.preventDefault();
-      const name = this.nameInput ? this.nameInput.value.trim() : '';
+    handleAddSubject() {
+      if (!this.currentNivel) {
+        window.showToast('Primero cree o seleccione un curso en el desplegable', 'warning');
+        return;
+      }
 
+      const name = this.subjectNameInput ? this.subjectNameInput.value.trim() : '';
       if (!name) {
-        window.showToast('Debe escribir el nombre de la asignatura', 'warning');
+        window.showToast('Escriba el nombre de la asignatura', 'warning');
         return;
       }
 
@@ -186,41 +397,23 @@
         esConceptual: conceptual
       });
 
-      this.form.reset();
-      // Restablecer defaults
+      if (this.subjectNameInput) this.subjectNameInput.value = '';
       if (this.incideCheckbox) this.incideCheckbox.checked = true;
       if (this.conceptualCheckbox) this.conceptualCheckbox.checked = false;
-      if (this.nameInput) this.nameInput.focus();
 
       window.showToast(`Asignatura "${name}" agregada a ${this.currentNivel}`, 'success');
-      this.render();
+      this.renderSubjects();
     }
 
-    deleteSubject(subjectId) {
+    toggleIncide(subjectId) {
       const subjects = db.getSubjectsForCourse(this.currentNivel);
       const sub = subjects.find(s => s.id === subjectId);
       if (!sub) return;
 
-      if (confirm(`¿Está seguro de eliminar la asignatura "${sub.nombre}" del curso ${this.currentNivel}?`)) {
-        db.deleteSubjectForCourse(this.currentNivel, subjectId);
-        window.showToast(`Asignatura eliminada de ${this.currentNivel}`, 'info');
-        this.render();
-      }
-    }
-
-    toggleIncidencia(subjectId) {
-      const subjects = db.getSubjectsForCourse(this.currentNivel);
-      const sub = subjects.find(s => s.id === subjectId);
-      if (!sub) return;
-
-      const newIncide = !sub.incideEnPromedio;
-      db.saveSubjectForCourse(this.currentNivel, {
-        ...sub,
-        incideEnPromedio: newIncide
-      });
-
-      window.showToast(`Asignatura "${sub.nombre}" ahora ${newIncide ? 'INCIDE' : 'NO INCIDE (*)'} en el promedio`, 'success');
-      this.render();
+      sub.incideEnPromedio = !sub.incideEnPromedio;
+      db.saveSubjectForCourse(this.currentNivel, sub);
+      window.showToast(`Asignatura "${sub.nombre}": ${sub.incideEnPromedio ? 'Ahora incide en el promedio' : 'Ahora NO incide (*)'}`, 'info');
+      this.renderSubjects();
     }
 
     toggleConceptual(subjectId) {
@@ -228,14 +421,10 @@
       const sub = subjects.find(s => s.id === subjectId);
       if (!sub) return;
 
-      const newConceptual = !sub.esConceptual;
-      db.saveSubjectForCourse(this.currentNivel, {
-        ...sub,
-        esConceptual: newConceptual
-      });
-
-      window.showToast(`Asignatura "${sub.nombre}" ahora evalúa con ${newConceptual ? 'CONCEPTOS (I, S, B, MB)' : 'ESCALA NUMÉRICA'}`, 'success');
-      this.render();
+      sub.esConceptual = !sub.esConceptual;
+      db.saveSubjectForCourse(this.currentNivel, sub);
+      window.showToast(`Asignatura "${sub.nombre}": ${sub.esConceptual ? 'Evaluación por Conceptos (I, S, B, MB)' : 'Evaluación Numérica (1.0 - 7.0)'}`, 'info');
+      this.renderSubjects();
     }
 
     moveSubject(subjectId, direction) {
@@ -250,33 +439,41 @@
       subjects[idx] = subjects[targetIdx];
       subjects[targetIdx] = temp;
 
-      const ids = subjects.map(s => s.id);
-      db.reorderCourseSubjects(this.currentNivel, ids);
-      this.render();
+      const orderedIds = subjects.map(s => s.id);
+      db.reorderCourseSubjects(this.currentNivel, orderedIds);
+      this.renderSubjects();
+    }
+
+    deleteSubject(subjectId, subjectName) {
+      if (confirm(`¿Desea eliminar la asignatura "${subjectName}" de ${this.currentNivel}?`)) {
+        db.deleteSubjectForCourse(this.currentNivel, subjectId);
+        window.showToast(`Asignatura "${subjectName}" eliminada de ${this.currentNivel}`, 'info');
+        this.renderSubjects();
+      }
     }
 
     handleCopySubjects() {
-      const sourceNivel = this.copyFromSelect ? this.copyFromSelect.value : '';
-      if (!sourceNivel) {
-        window.showToast('Seleccione el curso de origen desde el cual desea copiar', 'warning');
+      const fromNivel = this.copyFromSelect ? this.copyFromSelect.value : null;
+      if (!fromNivel) {
+        window.showToast('Seleccione el curso de origen', 'warning');
         return;
       }
 
-      if (sourceNivel === this.currentNivel) {
-        window.showToast('El curso de origen y el curso de destino deben ser distintos', 'warning');
+      if (fromNivel === this.currentNivel) {
+        window.showToast('El curso de origen y el curso de destino deben ser diferentes', 'warning');
         return;
       }
 
-      const sourceSubjects = db.getSubjectsForCourse(sourceNivel);
+      const sourceSubjects = db.getSubjectsForCourse(fromNivel);
       if (sourceSubjects.length === 0) {
-        window.showToast(`El curso de origen "${sourceNivel}" no tiene asignaturas para copiar`, 'warning');
+        window.showToast(`El curso "${fromNivel}" no tiene asignaturas para copiar`, 'warning');
         return;
       }
 
-      if (confirm(`¿Copiar las ${sourceSubjects.length} asignaturas de "${sourceNivel}" hacia "${this.currentNivel}"?\n\n(Esto creará las asignaturas en ${this.currentNivel} respetando si inciden en el promedio y si son conceptuales).`)) {
-        const count = db.copySubjectsBetweenCourses(sourceNivel, this.currentNivel);
-        window.showToast(`Se copiaron ${count} asignaturas exitosamente hacia ${this.currentNivel}`, 'success');
-        this.render();
+      if (confirm(`¿Desea copiar las ${sourceSubjects.length} asignaturas de "${fromNivel}" a "${this.currentNivel}"?`)) {
+        const copied = db.copySubjectsBetweenCourses(fromNivel, this.currentNivel);
+        window.showToast(`Se copiaron ${copied.length} asignaturas a "${this.currentNivel}" exitosamente`, 'success');
+        this.renderSubjects();
       }
     }
   }

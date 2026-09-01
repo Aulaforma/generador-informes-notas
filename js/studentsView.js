@@ -64,18 +64,29 @@
       window.addEventListener('students_updated', () => {
         this.render();
       });
+
+      window.addEventListener('courses_updated', () => {
+        this.populateNivelesDropdowns();
+        this.render();
+      });
     }
 
     populateNivelesDropdowns() {
+      const courseNames = db.getCourseNames();
+
       if (this.nivelFilter) {
         this.nivelFilter.innerHTML = '<option value="">Todos los Niveles</option>' +
-          NIVELES_DISPONIBLES.map(n => `<option value="${n}">${n}</option>`).join('');
+          courseNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
       }
 
       const formNivel = document.getElementById('student-nivel');
       if (formNivel) {
-        formNivel.innerHTML = '<option value="" disabled selected>Seleccione un nivel...</option>' +
-          NIVELES_DISPONIBLES.map(n => `<option value="${n}">${n}</option>`).join('');
+        if (courseNames.length === 0) {
+          formNivel.innerHTML = '<option value="" disabled selected>No hay cursos creados (vaya a Cursos y Asignaturas)</option>';
+        } else {
+          formNivel.innerHTML = '<option value="" disabled selected>Seleccione un nivel...</option>' +
+            courseNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+        }
       }
     }
 

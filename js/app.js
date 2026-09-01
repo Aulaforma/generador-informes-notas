@@ -51,14 +51,8 @@
     window.pdfExporter = new window.PdfExporter();
 
     // 3. Inicializar selector de niveles en la vista de informes
-    const reportNivelSelect = document.getElementById('report-select-nivel');
-    if (reportNivelSelect && NIVELES_DISPONIBLES) {
-      reportNivelSelect.innerHTML = NIVELES_DISPONIBLES.map(n => `<option value="${n}">${n}</option>`).join('');
-      // Seleccionar por defecto 'Primero Básico A'
-      const p1Opt = Array.from(reportNivelSelect.options).find(o => o.value === 'Primero Básico A');
-      if (p1Opt) reportNivelSelect.value = 'Primero Básico A';
-      
-      window.reportGenerator.updateStudentDropdown();
+    if (window.reportGenerator) {
+      window.reportGenerator.populateNivelSelect();
     }
 
     // 4. Configurar Navegación por pestañas
@@ -86,7 +80,9 @@
           window.gradesView.updateSubjectDropdown();
           window.gradesView.render();
         } else if (targetViewId === 'subjects-view') {
-          window.subjectsView.render();
+          window.subjectsView.populateNivelSelects();
+          window.subjectsView.renderCoursesTable();
+          window.subjectsView.renderSubjects();
         } else if (targetViewId === 'attendance-view') {
           window.attendanceView.render();
         } else if (targetViewId === 'students-view') {

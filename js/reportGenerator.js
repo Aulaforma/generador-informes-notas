@@ -38,6 +38,7 @@
     }
 
     init() {
+      this.populateNivelSelect();
       this.initEvents();
 
       window.addEventListener('subjects_updated', () => {
@@ -47,6 +48,29 @@
       window.addEventListener('school_config_updated', () => {
         this.renderPreview();
       });
+
+      window.addEventListener('courses_updated', () => {
+        this.populateNivelSelect();
+        this.renderPreview();
+      });
+    }
+
+    populateNivelSelect() {
+      if (!this.nivelSelect) return;
+      const courseNames = db.getCourseNames();
+      const currentVal = this.nivelSelect.value;
+
+      if (courseNames.length === 0) {
+        this.nivelSelect.innerHTML = '<option value="">(No hay cursos creados)</option>';
+      } else {
+        this.nivelSelect.innerHTML = courseNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+        if (currentVal && courseNames.includes(currentVal)) {
+          this.nivelSelect.value = currentVal;
+        } else {
+          this.nivelSelect.selectedIndex = 0;
+        }
+      }
+      this.updateStudentDropdown();
     }
 
     initEvents() {

@@ -51,7 +51,7 @@
       <span>📝</span> Calificaciones (12 Notas)
     </button>
     <button class="nav-tab-btn" data-view="subjects-view" id="tab-btn-subjects">
-      <span>📚</span> Asignaturas por Curso
+      <span>🏫</span> Cursos y Asignaturas
     </button>
     <button class="nav-tab-btn" data-view="attendance-view" id="tab-btn-attendance">
       <span>📅</span> Control de Asistencia
@@ -171,20 +171,86 @@
       </div>
     </section>
 
-    <!-- 2. VISTA DE GESTIÓN DE ASIGNATURAS POR CURSO -->
+    <!-- 2. VISTA DE GESTIÓN DE CURSOS Y ASIGNATURAS -->
     <section class="view-container" id="subjects-view">
+      
+      <!-- PANEL 1: CREAR CURSO Y ASIGNAR PROFESOR(A) JEFE -->
+      <div class="card no-print" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+          <div>
+            <h2>🏫 1. Crear Curso y Asignar Profesor(a) Jefe</h2>
+            <p>Cree los cursos del establecimiento y asigne el nombre del Profesor(a) Jefe titular correspondiente. Todos los cursos creados aparecerán automáticamente en los desplegables de toda la aplicación.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-load-official-catalog">
+              ⚡ Cargar Catálogo Oficial (27 Cursos)
+            </button>
+            <span class="header-badge-tag" id="courses-total-badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.85rem; padding: 0.4rem 0.8rem;">
+              0 cursos
+            </span>
+          </div>
+        </div>
+
+        <!-- FORMULARIO CREAR CURSO -->
+        <div class="card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.25rem; padding: 1.2rem;">
+          <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem;">
+            ➕ Registrar Nuevo Curso
+          </h3>
+          <form id="course-add-form">
+            <div style="display: grid; grid-template-columns: 1.5fr 1.5fr auto; gap: 1rem; align-items: flex-end;">
+              <div class="form-group">
+                <label for="course-input-name">Nombre del Curso / Nivel: <span class="required-star">*</span></label>
+                <input type="text" id="course-input-name" class="form-control" required placeholder="Ej: Primero Básico A, Kínder, 4° Medio Científico..." />
+              </div>
+              <div class="form-group">
+                <label for="course-input-profesor">Profesor(a) Jefe Titular Asignado:</label>
+                <input type="text" id="course-input-profesor" class="form-control" placeholder="Ej: Prof. Carmen Gloria Muñoz..." />
+              </div>
+              <div>
+                <button type="submit" class="btn btn-primary" style="height: 38px;">
+                  ➕ Crear Curso
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- TABLA DE CURSOS CREADOS -->
+        <div class="table-responsive-wrapper" style="max-height: 380px;">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th style="width: 250px;">Nombre del Curso</th>
+                <th>Profesor(a) Jefe Titular Asignado</th>
+                <th style="width: 140px; text-align: center;">Asignaturas</th>
+                <th style="width: 140px; text-align: center;">Matrícula</th>
+                <th style="width: 160px; text-align: center;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="courses-table-body">
+              <!-- Renderizado dinámico desde subjectsView.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANEL 2: ASIGNATURAS POR CURSO (CURSOS EN DESPLEGABLE) -->
       <div class="card no-print">
         <div class="card-header">
           <div>
-            <h2>📚 Plan de Asignaturas por Curso</h2>
-            <p>Escriba y configure las asignaturas para cada nivel. Indique si inciden en el promedio final y si utilizan escala conceptual oficial (I, S, B, MB).</p>
+            <h2>📚 2. Asignaturas por Curso (Plan de Estudios)</h2>
+            <p>Seleccione el curso en el desplegable y agregue las asignaturas que componen su plan. Puede diferenciar con asterisco (*) aquellas que no inciden en el promedio y configurar escala conceptual oficial (I, S, B, MB).</p>
           </div>
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <div class="form-group" style="min-width: 240px;">
-              <label for="subjects-select-nivel">Seleccionar Curso / Nivel:</label>
-              <select id="subjects-select-nivel" class="form-control"></select>
+            <div class="form-group" style="min-width: 250px;">
+              <label for="subjects-select-nivel"><strong>Seleccionar Curso Creado:</strong></label>
+              <select id="subjects-select-nivel" class="form-control" style="font-weight: 700; border-color: #3b82f6;"></select>
             </div>
-            <div style="align-self: flex-end; padding-bottom: 0.4rem;">
+            <div style="align-self: flex-end; padding-bottom: 0.4rem; display: flex; gap: 0.5rem; align-items: center;">
+              <span id="course-current-pj-badge" class="header-badge-tag" style="background: #f0fdf4; color: #166534; font-size: 0.85rem; padding: 0.35rem 0.75rem; border: 1px solid #bbf7d0;">
+                👨‍🏫 Profesor(a) Jefe: Cargando...
+              </span>
               <span class="header-badge-tag" id="subjects-count-badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.85rem; padding: 0.35rem 0.75rem;">
                 0 asignaturas
               </span>
@@ -201,7 +267,7 @@
           </ul>
         </div>
 
-        <!-- FORMULARIO PARA AGREGAR NUEVA ASIGNATURA -->
+        <!-- FORMULARIO PARA AGREGAR NUEVA ASIGNATURA AL CURSO SELECCIONADO -->
         <div class="card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.5rem; padding: 1.2rem;">
           <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem;">
             ➕ Agregar Nueva Asignatura a este Curso
@@ -210,7 +276,7 @@
             <div style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr auto; gap: 1rem; align-items: flex-end;">
               <div class="form-group">
                 <label for="subject-input-name">Nombre de la Asignatura: <span class="required-star">*</span></label>
-                <input type="text" id="subject-input-name" class="form-control" required placeholder="Ej: Matemática, Lenguaje, Orientación, Religión..." />
+                <input type="text" id="subject-input-name" class="form-control" required placeholder="Ej: Lenguaje, Matemática, Orientación, Religión..." />
               </div>
 
               <div class="form-group" style="padding-bottom: 0.5rem;">

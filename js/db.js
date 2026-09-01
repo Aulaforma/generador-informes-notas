@@ -19,6 +19,7 @@
     GRADES: 'laa_grades',
     ATTENDANCE: 'laa_attendance',
     COURSE_SUBJECTS: 'laa_course_subjects',
+    COURSES: 'laa_courses',
     INITIALIZED: 'laa_db_initialized'
   };
 
@@ -169,13 +170,150 @@
       return updated;
     }
 
+    // --- GESTIÓN DINÁMICA DE CURSOS Y PROFESORES JEFE ---
+    getCourses() {
+      try {
+        let courses = JSON.parse(localStorage.getItem(DB_KEYS.COURSES));
+        if (!courses || courses.length === 0) {
+          courses = [
+            { id: 'cur_p1a', nombre: 'Primero Básico A', profesorJefe: 'Prof. Carmen Gloria Muñoz', orden: 1 },
+            { id: 'cur_m1a', nombre: 'Primero Medio A', profesorJefe: 'Prof. Alejandro Valenzuela', orden: 2 }
+          ];
+          localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+        }
+        return courses.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    getCourseNames() {
+      return this.getCourses().map(c => c.nombre);
+    }
+
+    getCourseById(id) {
+      return this.getCourses().find(c => c.id === id) || null;
+    }
+
+    getCourseByName(nombre) {
+      if (!nombre) return null;
+      const clean = nombre.trim().toLowerCase();
+      return this.getCourses().find(c => c.nombre.trim().toLowerCase() === clean) || null;
+    }
+
+    saveCourse(courseData) {
+      const courses = this.getCourses();
+      const nombre = (courseData.nombre || '').trim();
+      const profesorJefe = (courseData.profesorJefe || '').trim();
+
+      if (!nombre) return null;
+
+      let saved = null;
+      if (courseData.id) {
+        const idx = courses.findIndex(c => c.id === courseData.id);
+        if (idx !== -1) {
+          const oldName = courses[idx].nombre;
+          courses[idx] = {
+            ...courses[idx],
+            nombre,
+            profesorJefe
+          };
+          saved = courses[idx];
+
+          if (oldName && oldName !== nombre) {
+            this.renameCourseReferences(oldName, nombre);
+          }
+        }
+      } else {
+        const existing = courses.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
+        if (existing) {
+          existing.profesorJefe = profesorJefe || existing.profesorJefe;
+          saved = existing;
+        } else {
+          saved = {
+            id: 'cur_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            nombre,
+            profesorJefe,
+            orden: courses.length + 1
+          };
+          courses.push(saved);
+        }
+      }
+
+      localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+      window.dispatchEvent(new CustomEvent('courses_updated', { detail: saved }));
+      return saved;
+    }
+
+    deleteCourse(courseId) {
+      const courses = this.getCourses();
+      const course = courses.find(c => c.id === courseId);
+      if (!course) return;
+
+      const filtered = courses.filter(c => c.id !== courseId);
+      filtered.forEach((c, idx) => { c.orden = idx + 1; });
+      localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(filtered));
+      window.dispatchEvent(new CustomEvent('courses_updated', { detail: { deletedId: courseId, nombre: course.nombre } }));
+    }
+
+    renameCourseReferences(oldName, newName) {
+      const students = this.getStudents();
+      let updatedStudents = false;
+      students.forEach(st => {
+        if (st.nivel === oldName) {
+          st.nivel = newName;
+          updatedStudents = true;
+        }
+      });
+      if (updatedStudents) {
+        localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
+      }
+
+      const subjectsMap = this.getAllCourseSubjectsMap();
+      if (subjectsMap[oldName]) {
+        subjectsMap[newName] = subjectsMap[oldName];
+        delete subjectsMap[oldName];
+        localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(subjectsMap));
+      }
+    }
+
+    loadOfficialCoursesCatalog() {
+      const currentCourses = this.getCourses();
+      const existingNames = new Set(currentCourses.map(c => c.nombre.toLowerCase()));
+
+      NIVELES_DISPONIBLES.forEach((n, idx) => {
+        if (!existingNames.has(n.toLowerCase())) {
+          currentCourses.push({
+            id: 'cur_cat_' + (idx + 1),
+            nombre: n,
+            profesorJefe: '',
+            orden: currentCourses.length + 1
+          });
+        }
+      });
+
+      localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(currentCourses));
+      window.dispatchEvent(new CustomEvent('courses_updated', { detail: { loadedCatalog: true } }));
+      return currentCourses.length;
+    }
+
     getProfesorJefeForCourse(nivel) {
+      if (!nivel) return 'Profesor(a) Jefe';
+      const course = this.getCourseByName(nivel);
+      if (course && course.profesorJefe && course.profesorJefe.trim()) {
+        return course.profesorJefe.trim();
+      }
       const config = this.getConfig();
       const map = config.profesoresJefe || {};
       return (map[nivel] && map[nivel].trim()) ? map[nivel].trim() : (config.profesorJefe || 'Profesor(a) Jefe');
     }
 
     saveProfesorJefeForCourse(nivel, nombre) {
+      const course = this.getCourseByName(nivel);
+      if (course) {
+        course.profesorJefe = (nombre || '').trim();
+        return this.saveCourse(course);
+      }
       const config = this.getConfig();
       if (!config.profesoresJefe) config.profesoresJefe = {};
       config.profesoresJefe[nivel] = (nombre || '').trim();
@@ -183,6 +321,22 @@
     }
 
     saveAllProfesoresJefe(map) {
+      const courses = this.getCourses();
+      let modified = false;
+
+      Object.keys(map).forEach(nivel => {
+        const c = courses.find(item => item.nombre.toLowerCase() === nivel.toLowerCase());
+        if (c) {
+          c.profesorJefe = (map[nivel] || '').trim();
+          modified = true;
+        }
+      });
+
+      if (modified) {
+        localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+        window.dispatchEvent(new CustomEvent('courses_updated', { detail: map }));
+      }
+
       const config = this.getConfig();
       config.profesoresJefe = { ...(config.profesoresJefe || {}), ...map };
       return this.saveConfig(config);

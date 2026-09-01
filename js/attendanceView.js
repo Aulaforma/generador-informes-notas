@@ -51,13 +51,32 @@
       window.addEventListener('students_updated', () => {
         this.render();
       });
+
+      window.addEventListener('courses_updated', () => {
+        this.populateNivelSelect();
+        this.render();
+      });
     }
 
     populateNivelSelect() {
       if (this.nivelSelect) {
-        this.nivelSelect.innerHTML = NIVELES_DISPONIBLES.map(n => 
-          `<option value="${n}">${n}</option>`
+        const courseNames = db.getCourseNames();
+        if (courseNames.length === 0) {
+          this.nivelSelect.innerHTML = '<option value="">(No hay cursos creados)</option>';
+          this.currentNivel = '';
+          return;
+        }
+
+        this.nivelSelect.innerHTML = courseNames.map(n => 
+          `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`
         ).join('');
+
+        if (this.currentNivel && courseNames.includes(this.currentNivel)) {
+          this.nivelSelect.value = this.currentNivel;
+        } else {
+          this.nivelSelect.selectedIndex = 0;
+          this.currentNivel = this.nivelSelect.value;
+        }
       }
     }
 
