@@ -50,6 +50,9 @@
     <button class="nav-tab-btn active" data-view="grades-view" id="tab-btn-grades">
       <span>📝</span> Calificaciones (12 Notas)
     </button>
+    <button class="nav-tab-btn" data-view="subjects-view" id="tab-btn-subjects">
+      <span>📚</span> Asignaturas por Curso
+    </button>
     <button class="nav-tab-btn" data-view="attendance-view" id="tab-btn-attendance">
       <span>📅</span> Control de Asistencia
     </button>
@@ -119,9 +122,13 @@
           </div>
         </div>
 
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.6rem 0.9rem; margin-bottom: 1rem; font-size: 0.84rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.6rem 0.9rem; margin-bottom: 0.75rem; font-size: 0.84rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
           <span>💡</span>
           <span><strong>Regla de Redondeo Oficial:</strong> Los promedios se calculan aritméticamente y se aproximan en el segundo decimal (ejemplo: 6,57 = 6,6; 6,44 = 6,4). Use <strong>Enter</strong>, <strong>Tab</strong> o las <strong>Flechas</strong> para desplazarse rápidamente.</span>
+        </div>
+
+        <!-- BANNER INFORMATIVO DE ASIGNATURA SELECCIONADA -->
+        <div id="grades-subject-info-banner" style="display: none; padding: 0.65rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.85rem; background: #fffbeb; border: 1px solid #fde68a; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
         </div>
 
         <!-- CUADRÍCULA DE CALIFICACIONES (HASTA 40 ALUMNOS) -->
@@ -164,7 +171,100 @@
       </div>
     </section>
 
-    <!-- 2. VISTA DE ASISTENCIA (VISTA PROFESOR JEFE) -->
+    <!-- 2. VISTA DE GESTIÓN DE ASIGNATURAS POR CURSO -->
+    <section class="view-container" id="subjects-view">
+      <div class="card no-print">
+        <div class="card-header">
+          <div>
+            <h2>📚 Plan de Asignaturas por Curso</h2>
+            <p>Escriba y configure las asignaturas para cada nivel. Indique si inciden en el promedio final y si utilizan escala conceptual oficial (I, S, B, MB).</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <div class="form-group" style="min-width: 240px;">
+              <label for="subjects-select-nivel">Seleccionar Curso / Nivel:</label>
+              <select id="subjects-select-nivel" class="form-control"></select>
+            </div>
+            <div style="align-self: flex-end; padding-bottom: 0.4rem;">
+              <span class="header-badge-tag" id="subjects-count-badge" style="background: #e0e7ff; color: #3730a3; font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                0 asignaturas
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- REGLAS Y RECORDATORIOS ACADÉMICOS -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.85rem 1.1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #1e40af; line-height: 1.45;">
+          <div style="font-weight: 700; margin-bottom: 0.25rem;">📌 Reglas Académicas Aplicadas:</div>
+          <ul style="margin-left: 1.25rem;">
+            <li><strong>Asignaturas que No Inciden (*):</strong> Se muestran automáticamente con un asterisco (<code>*</code>) en todos los informes y planillas, y quedan <strong>excluidas</strong> del cálculo del Promedio General del Estudiante.</li>
+            <li><strong>Escala Conceptual (Orientación, Religión):</strong> Las notas pasan a conceptos: <strong>MB</strong> (6,0 - 7,0 Muy Bien), <strong>B</strong> (5,0 - 5,9 Bien), <strong>S</strong> (4,0 - 4,9 Suficiente), <strong>I</strong> (1,0 - 3,9 Insuficiente).</li>
+          </ul>
+        </div>
+
+        <!-- FORMULARIO PARA AGREGAR NUEVA ASIGNATURA -->
+        <div class="card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.5rem; padding: 1.2rem;">
+          <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem;">
+            ➕ Agregar Nueva Asignatura a este Curso
+          </h3>
+          <form id="subject-add-form">
+            <div style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr auto; gap: 1rem; align-items: flex-end;">
+              <div class="form-group">
+                <label for="subject-input-name">Nombre de la Asignatura: <span class="required-star">*</span></label>
+                <input type="text" id="subject-input-name" class="form-control" required placeholder="Ej: Matemática, Lenguaje, Orientación, Religión..." />
+              </div>
+
+              <div class="form-group" style="padding-bottom: 0.5rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                  <input type="checkbox" id="subject-check-incide" checked style="width: 17px; height: 17px;" />
+                  <span>¿Incide en promedio final?</span>
+                </label>
+                <span style="font-size: 0.72rem; color: #64748b;">(Si desmarca, se agrega asterisco *)</span>
+              </div>
+
+              <div class="form-group" style="padding-bottom: 0.5rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                  <input type="checkbox" id="subject-check-conceptual" style="width: 17px; height: 17px;" />
+                  <span>¿Evalúa con Conceptos?</span>
+                </label>
+                <span style="font-size: 0.72rem; color: #64748b;">(I, S, B, MB para Orientación/Religión)</span>
+              </div>
+
+              <div>
+                <button type="submit" class="btn btn-primary" style="height: 38px;">
+                  ➕ Agregar Asignatura
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- LISTA DE ASIGNATURAS CONFIGURADAS PARA EL CURSO -->
+        <div style="margin-bottom: 1.5rem;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; color: #334155; margin-bottom: 0.75rem;">
+            Nómina de Asignaturas del Curso (Plan de Estudio):
+          </h3>
+          <div id="subjects-list-container">
+            <!-- Renderizado dinámico desde subjectsView.js -->
+          </div>
+        </div>
+
+        <!-- HERRAMIENTA: COPIAR ASIGNATURAS DESDE OTRO CURSO -->
+        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <strong style="font-size: 0.9rem; color: #0f172a;">⚡ Ahorro de Tiempo: Duplicar Asignaturas a este Curso</strong>
+            <p style="font-size: 0.8rem; color: #64748b; margin: 0;">¿Ya escribiste las asignaturas en otro curso? Cópialas directamente a este curso.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <select id="copy-subjects-from-select" class="form-control" style="width: 230px;"></select>
+            <button type="button" class="btn btn-secondary" id="btn-copy-subjects">
+              📋 Copiar a este Curso
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. VISTA DE ASISTENCIA (VISTA PROFESOR JEFE) -->
     <section class="view-container" id="attendance-view">
       <div class="card no-print">
         <div class="card-header">
@@ -432,6 +532,51 @@
           </div>
         </form>
       </div>
+
+      <!-- CARD DE ASIGNACIÓN DE PROFESORES JEFE POR CURSO -->
+      <div class="card no-print" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <div>
+            <h2>👨‍🏫 Designación de Profesores Jefe por Curso</h2>
+            <p>Asigne el nombre del Profesor(a) Jefe titular para cada uno de los cursos. Este nombre se inyectará automáticamente en la ficha y en la zona de firma de los informes de notas de los alumnos de ese curso.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="btn-save-profesores-jefe">
+              💾 Guardar Todos los Profesores Jefe
+            </button>
+          </div>
+        </div>
+
+        <!-- ASIGNACIÓN RÁPIDA -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <span style="font-size: 0.85rem; font-weight: 600; color: #1e293b;">Rellenar cursos sin profesor asignado:</span>
+            <span style="font-size: 0.78rem; color: #64748b; display: block;">Aplica el nombre a los cursos que aún no tengan profesor jefe escrito.</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="config-quick-profesor-input" class="form-control" placeholder="Ej: Profesor(a) Jefe..." style="width: 240px;" />
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-apply-quick-profesor">
+              ⚡ Rellenar Vacíos
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive-wrapper" style="max-height: 480px;">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">#</th>
+                <th style="width: 260px;">Curso / Nivel</th>
+                <th>Nombre del Profesor(a) Jefe Asignado</th>
+                <th style="width: 120px; text-align: center;">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="config-profesores-table-body">
+              <!-- Renderizado dinámico desde configView.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -565,6 +710,7 @@
   <script src="./js/db.js"></script>
   <script src="./js/seedData.js"></script>
   <script src="./js/configView.js"></script>
+  <script src="./js/subjectsView.js"></script>
   <script src="./js/studentsView.js"></script>
   <script src="./js/gradesView.js"></script>
   <script src="./js/attendanceView.js"></script>

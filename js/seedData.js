@@ -101,19 +101,52 @@
       });
     });
 
+    // Configurar asignaturas iniciales de demostración para Primero Básico A
+    const p1CourseSubjects = [
+      { nombre: 'Lenguaje y Comunicación', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Ciencias Naturales', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Música', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Orientación', incideEnPromedio: false, esConceptual: true }, // No incide (*), conceptual (I, S, B, MB)
+      { nombre: 'Religión', incideEnPromedio: false, esConceptual: true }      // No incide (*), conceptual (I, S, B, MB)
+    ];
+
+    p1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Básico A', s));
+
     // Generar calificaciones y asistencia para Primero Básico A
-    populateAcademicData(p1Students, 'Primero Básico A', 90);
+    populateAcademicData(p1Students, 'Primero Básico A', 90, p1CourseSubjects.map(s => s.nombre));
+
+    // Configurar asignaturas iniciales para Primero Medio A
+    const m1CourseSubjects = [
+      { nombre: 'Lengua y Literatura', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Biología', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Física', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Química', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Inglés', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Música', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
+      { nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
+      { nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
+    ];
+
+    m1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Medio A', s));
 
     // Generar calificaciones y asistencia para Primero Medio A
-    populateAcademicData(m1Students, 'Primero Medio A', 92);
+    populateAcademicData(m1Students, 'Primero Medio A', 92, m1CourseSubjects.map(s => s.nombre));
 
     db.markInitialized();
   }
 
-  function populateAcademicData(studentList, nivel, diasTrabajados) {
-    // Asignaturas principales para la prueba
-    const asignaturasPrueba = ASIGNATURAS_CATALOGO.slice(0, 14);
-
+  function populateAcademicData(studentList, nivel, diasTrabajados, asignaturasPrueba) {
     studentList.forEach((std, idx) => {
       // 1. Asistencia del estudiante
       const diasAsistidos = Math.max(76, diasTrabajados - (idx % 6) * 2 - Math.floor(Math.random() * 3));
@@ -121,25 +154,24 @@
 
       // 2. Calificaciones en cada asignatura
       asignaturasPrueba.forEach((asig, aIdx) => {
-        // Generar notas simuladas para 6 a 8 evaluaciones de las 12 disponibles
-        const numEvaluaciones = 6 + (aIdx % 4);
+        const isConceptSubject = asig.toLowerCase().includes('orientacion') || asig.toLowerCase().includes('religion');
+        const numEvaluaciones = isConceptSubject ? 4 : 6 + (aIdx % 4);
         const notas = [];
 
         for (let c = 0; c < 12; c++) {
           if (c < numEvaluaciones) {
-            // Para probar exactamente los ejemplos del usuario:
-            // Caso idx=0, asig 0 -> notas que den exactamente 6.57 para verificar 6.6
-            // Caso idx=1, asig 0 -> notas que den 6.44 para verificar 6.4
             if (idx === 0 && aIdx === 0 && c < 7) {
-              // [6.8, 6.5, 6.7, 6.2, 6.9, 6.3, 6.6] = 46.0 / 7 = 6.5714 -> 6.6
               const testNotes = [6.8, 6.5, 6.7, 6.2, 6.9, 6.3, 6.6];
               notas.push(testNotes[c]);
             } else if (idx === 1 && aIdx === 0 && c < 9) {
-              // [6.2, 6.5, 6.4, 6.3, 6.8, 6.1, 6.7, 6.5, 6.5] = 58.0 / 9 = 6.444 -> 6.4
               const testNotes = [6.2, 6.5, 6.4, 6.3, 6.8, 6.1, 6.7, 6.5, 6.5];
               notas.push(testNotes[c]);
+            } else if (isConceptSubject) {
+              // Generar notas conceptuales variadas para mostrar MB, B, S, I
+              // MB (6.0 - 7.0), B (5.0 - 5.9), S (4.0 - 4.9), I (1.0 - 3.9)
+              const conceptGrades = [6.5, 6.8, 5.5, 4.5, 3.5, 6.0, 5.8];
+              notas.push(conceptGrades[(idx + c) % conceptGrades.length]);
             } else {
-              // Distribución natural
               const base = 5.2 + ((idx + aIdx * 2 + c) % 18) * 0.1;
               const nota = Math.min(7.0, Math.max(3.8, Math.round(base * 10) / 10));
               notas.push(nota);

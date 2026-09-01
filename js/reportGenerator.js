@@ -3,6 +3,12 @@
  * Motor de plantillas oficial para la generación de Informes de Calificaciones y Asistencia.
  * Genera el documento individual o por lote (curso completo) en tamaño Carta (Letter),
  * garantizando que cada estudiante ocupe exactamente 1 página física.
+ * 
+ * Reglas aplicadas:
+ * - Asignaturas por curso definidas por el usuario.
+ * - Asignaturas que no inciden marcadas con asterisco (*).
+ * - Asignaturas conceptuales (Orientación, Religiones) con notas convertidas a conceptos (I, S, B, MB).
+ * - Promedio General del Estudiante computado únicamente con las asignaturas que inciden.
  */
 
 (function (root, factory) {
@@ -14,9 +20,10 @@
 })(typeof self !== 'undefined' ? self : this, function (dbModule) {
 
   const db = dbModule.db;
-  const ASIGNATURAS_CATALOGO = dbModule.ASIGNATURAS_CATALOGO;
   const formatGrade = dbModule.formatGrade;
   const roundToChileanGrade = dbModule.roundToChileanGrade;
+  const convertToConcept = dbModule.convertToConcept;
+  const getConceptDescription = dbModule.getConceptDescription;
 
   class ReportGenerator {
     constructor() {
@@ -32,6 +39,14 @@
 
     init() {
       this.initEvents();
+
+      window.addEventListener('subjects_updated', () => {
+        this.renderPreview();
+      });
+
+      window.addEventListener('school_config_updated', () => {
+        this.renderPreview();
+      });
     }
 
     initEvents() {
@@ -90,7 +105,7 @@
       `).join('');
     }
 
-    generateStudentReportHtml(student, config, allCourseSubjects) {
+    generateStudentReportHtml(student, config) {
       const nivel = student.nivel;
       const formattedRut = formatRut(student.rut, student.dv);
       const currentDateStr = new Date().toLocaleDateString('es-CL', {
@@ -99,41 +114,79 @@
         day: 'numeric'
       });
 
-      // 1. Obtener notas de cada asignatura y promedios comparativos
-      let evaluatedCount = 0;
-      let studentSum = 0;
+      // 1. Obtener las asignaturas configuradas específicamente para este curso
+      const courseSubjects = db.getSubjectsForCourse(nivel);
 
-      const rowsHtml = allCourseSubjects.map((asig, index) => {
-        const gradeRecord = db.getGradesForStudentAndSubject(student.id, asig);
+      // Si el curso no tiene asignaturas personalizadas aún, mostrar aviso
+      if (courseSubjects.length === 0) {
+        return `
+          <div class="report-page letter-sheet" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #475569;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📚</div>
+            <h2 style="color: #1e3a8a;">Asignaturas No Configuradas</h2>
+            <p>El curso <strong>${escapeHtml(nivel)}</strong> aún no tiene asignaturas registradas en el plan de estudios.</p>
+            <p style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">Vaya a la pestaña "📚 Asignaturas por Curso" para ingresar las asignaturas correspondientes.</p>
+          </div>
+        `;
+      }
+
+      let hasNonIncidentSubjects = false;
+      let hasConceptualSubjects = false;
+      let evaluatedIncidentCount = 0;
+
+      // Generar filas de tabla (hasta 18 asignaturas)
+      const rowsHtml = courseSubjects.slice(0, 18).map((sub, index) => {
+        const gradeRecord = db.getGradesForStudentAndSubject(student.id, sub.nombre);
         const studentSubjectAvg = (gradeRecord && gradeRecord.promedio !== null && gradeRecord.promedio !== undefined) ? gradeRecord.promedio : null;
-        const courseSubjectAvg = db.getCourseSubjectAverage(nivel, asig);
+        const courseSubjectAvg = db.getCourseSubjectAverage(nivel, sub.nombre);
 
-        if (studentSubjectAvg !== null) {
-          evaluatedCount++;
-          studentSum += studentSubjectAvg;
+        const noIncide = sub.incideEnPromedio === false;
+        const isConceptual = sub.esConceptual;
+
+        if (noIncide) hasNonIncidentSubjects = true;
+        if (isConceptual) hasConceptualSubjects = true;
+
+        if (studentSubjectAvg !== null && !noIncide && !isConceptual) {
+          evaluatedIncidentCount++;
         }
 
-        const formattedStudentGrade = formatGrade(studentSubjectAvg);
-        const formattedCourseGrade = formatGrade(courseSubjectAvg);
+        // Formato del nombre con asterisco si no incide
+        const subjectDisplayName = noIncide ? `${sub.nombre} *` : sub.nombre;
 
-        const isLowGrade = studentSubjectAvg !== null && studentSubjectAvg < 4.0;
-        const gradeClass = isLowGrade ? 'grade-low' : (studentSubjectAvg >= 6.0 ? 'grade-good' : '');
+        // Formato de la nota final del estudiante
+        let finalGradeDisplay = '-';
+        let gradeClass = '';
+        if (studentSubjectAvg !== null) {
+          if (isConceptual) {
+            finalGradeDisplay = convertToConcept(studentSubjectAvg);
+            gradeClass = finalGradeDisplay === 'I' ? 'grade-low' : (finalGradeDisplay === 'MB' ? 'grade-good' : '');
+          } else {
+            finalGradeDisplay = formatGrade(studentSubjectAvg);
+            gradeClass = studentSubjectAvg < 4.0 ? 'grade-low' : (studentSubjectAvg >= 6.0 ? 'grade-good' : '');
+          }
+        }
+
+        // Formato del promedio del curso
+        let courseGradeDisplay = '-';
+        if (courseSubjectAvg !== null) {
+          if (isConceptual) {
+            courseGradeDisplay = convertToConcept(courseSubjectAvg);
+          } else {
+            courseGradeDisplay = formatGrade(courseSubjectAvg);
+          }
+        }
 
         return `
           <tr>
-            <td class="center" style="width: 26px; color: #64748b; font-size: 7.5pt;">${index + 1}</td>
-            <td style="font-weight: 500;">${escapeHtml(asig)}</td>
-            <td class="center grade-val ${gradeClass}" style="width: 85px;">${formattedStudentGrade}</td>
-            <td class="center" style="width: 105px; color: #334155; font-weight: 600;">${formattedCourseGrade}</td>
+            <td class="center" style="width: 24px; color: #64748b; font-size: 7.5pt;">${index + 1}</td>
+            <td style="font-weight: 500; font-size: 8.2pt;">${escapeHtml(subjectDisplayName)}</td>
+            <td class="center grade-val ${gradeClass}" style="width: 80px; font-weight: 700;">${finalGradeDisplay}</td>
+            <td class="center" style="width: 100px; color: #334155; font-weight: 600;">${courseGradeDisplay}</td>
           </tr>
         `;
       }).join('');
 
-      // 2. Promedio General del Estudiante (Regla oficial de redondeo chilena a partir del 2do decimal)
-      let generalAverage = null;
-      if (evaluatedCount > 0) {
-        generalAverage = roundToChileanGrade(studentSum / evaluatedCount);
-      }
+      // 2. Promedio General del Estudiante (solo asignaturas que inciden y son numéricas)
+      const generalAverage = db.getStudentGeneralAverage(student.id);
       const formattedGeneralAvg = formatGrade(generalAverage);
 
       // 3. Asistencia del Estudiante
@@ -179,7 +232,7 @@
             </div>
             <div>
               <span class="item-label">PROFESOR(A) JEFE:</span> 
-              <span class="item-value">${escapeHtml(config.profesorJefe || 'Profesor(a) Jefe')}</span>
+              <span class="item-value">${escapeHtml(db.getProfesorJefeForCourse(student.nivel))}</span>
             </div>
             <div>
               <span class="item-label">FECHA EMISIÓN:</span> 
@@ -191,20 +244,26 @@
             </div>
           </div>
 
-          <!-- 3. Cuerpo del Informe: Tabla Comparativa (hasta 18 filas) -->
+          <!-- 3. Cuerpo del Informe: Tabla Comparativa -->
           <table class="report-grades-table sheet-table">
             <thead>
               <tr>
-                <th class="center" style="width: 26px;">#</th>
+                <th class="center" style="width: 24px;">#</th>
                 <th>Sector de Aprendizaje / Asignatura</th>
-                <th class="center" style="width: 85px;">Nota Final</th>
-                <th class="center" style="width: 105px;">Promedio Curso</th>
+                <th class="center" style="width: 80px;">Nota Final</th>
+                <th class="center" style="width: 100px;">Promedio Curso</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
             </tbody>
           </table>
+
+          <!-- NOTAS AL PIE DE TABLA: ASTERISCO Y ESCALA CONCEPTUAL -->
+          <div style="font-size: 7pt; color: #475569; margin-bottom: 5px; line-height: 1.35; padding: 2px 4px;">
+            ${hasNonIncidentSubjects ? `<div><strong>*</strong> Asignatura que no incide en el cálculo del Promedio General del estudiante.</div>` : ''}
+            ${hasConceptualSubjects ? `<div><strong>Escala Conceptual Oficial:</strong> MB = Muy Bien (6,0 a 7,0) • B = Bien (5,0 a 5,9) • S = Suficiente (4,0 a 4,9) • I = Insuficiente (1,0 a 3,9).</div>` : ''}
+          </div>
 
           <!-- 4. Resumen Final: Promedio General y Resumen de Asistencia -->
           <div class="report-summary-container sheet-summary">
@@ -213,12 +272,12 @@
               <div class="summary-title title">Resumen Académico</div>
               <div class="big-average avg-display">
                 <span>PROMEDIO GENERAL:</span>
-                <span class="big-average-value avg-num" style="color: ${generalAverage !== null && generalAverage < 4.0 ? '#dc2626' : '#1e3a8a'};">
+                <span class="big-average-value avg-num" style="color: ${generalAverage !== null && generalAverage < 4.0 ? '#dc2626' : '#1e3a8a'}; font-size: 13pt;">
                   ${formattedGeneralAvg}
                 </span>
               </div>
-              <div style="font-size: 7pt; color: #64748b; margin-top: 2px;">
-                Asignaturas evaluadas: <strong>${evaluatedCount} de ${allCourseSubjects.length}</strong>
+              <div style="font-size: 6.8pt; color: #64748b; margin-top: 2px;">
+                Asignaturas computadas: <strong>${evaluatedIncidentCount}</strong> (excluye asignaturas con * que no inciden)
               </div>
             </div>
 
@@ -252,7 +311,7 @@
             <div class="signature-box sheet-signature-box">
               <div class="signature-line sheet-signature-line"></div>
               <div class="signature-text sheet-signature-label">Firma Profesor(a) Jefe</div>
-              <div class="signature-subtext">${escapeHtml(config.profesorJefe || 'Profesor(a) Jefe')}</div>
+              <div class="signature-subtext">${escapeHtml(db.getProfesorJefeForCourse(student.nivel))}</div>
             </div>
             <div class="signature-box sheet-signature-box">
               <div class="signature-line sheet-signature-line"></div>
@@ -275,8 +334,6 @@
       const nivel = this.nivelSelect.value;
       const isBatch = this.modeRadioBatch && this.modeRadioBatch.checked;
       const config = db.getConfig();
-      // Hasta 18 asignaturas para el plan de estudio
-      const allCourseSubjects = ASIGNATURAS_CATALOGO.slice(0, 18);
 
       if (isBatch) {
         const students = db.getStudents(nivel);
@@ -288,14 +345,14 @@
           this.container.innerHTML = `
             <div style="text-align: center; padding: 4rem 1rem; color: #cbd5e1; background: #1e293b; border-radius: 12px; width: 100%;">
               <div style="font-size: 3rem; margin-bottom: 0.5rem;">📄</div>
-              <h3 style="color: #ffffff;">No hay estudiantes matriculados en ${nivel}</h3>
+              <h3 style="color: #ffffff;">No hay estudiantes matriculados en ${escapeHtml(nivel)}</h3>
               <p style="color: #94a3b8; font-size: 0.9rem;">Matricule estudiantes en este nivel para generar los informes por lote.</p>
             </div>
           `;
           return;
         }
 
-        const allPagesHtml = students.map(std => this.generateStudentReportHtml(std, config, allCourseSubjects)).join('');
+        const allPagesHtml = students.map(std => this.generateStudentReportHtml(std, config)).join('');
         this.container.innerHTML = allPagesHtml;
       } else {
         const studentId = this.studentSelect ? this.studentSelect.value : null;
@@ -316,7 +373,7 @@
           return;
         }
 
-        this.container.innerHTML = this.generateStudentReportHtml(student, config, allCourseSubjects);
+        this.container.innerHTML = this.generateStudentReportHtml(student, config);
       }
     }
   }

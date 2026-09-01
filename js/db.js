@@ -1,7 +1,7 @@
 /**
  * js/db.js
  * Capa de datos relacional en memoria persistida en LocalStorage.
- * Administra entidades: Institución, Niveles, Asignaturas, Estudiantes, Calificaciones y Asistencia.
+ * Administra entidades: Institución, Niveles, Asignaturas por Curso, Estudiantes, Calificaciones y Asistencia.
  */
 
 (function (root, factory) {
@@ -18,6 +18,7 @@
     STUDENTS: 'laa_students',
     GRADES: 'laa_grades',
     ATTENDANCE: 'laa_attendance',
+    COURSE_SUBJECTS: 'laa_course_subjects',
     INITIALIZED: 'laa_db_initialized'
   };
 
@@ -52,28 +53,6 @@
     'Curso Laboral'
   ];
 
-  // Asignaturas estándar del currículum escolar (hasta 18 asignaturas para el informe)
-  const ASIGNATURAS_CATALOGO = [
-    'Lenguaje y Comunicación / Literatura',
-    'Matemática',
-    'Ciencias Naturales (Biología/Física/Química)',
-    'Historia, Geografía y Ciencias Sociales',
-    'Idioma Extranjero: Inglés',
-    'Educación Física y Salud',
-    'Artes Visuales',
-    'Música',
-    'Tecnología',
-    'Orientación',
-    'Religión',
-    'Filosofía',
-    'Educación Ciudadana',
-    'Taller de Expresión Artística',
-    'Taller de Comprensión Lectora',
-    'Taller de Razonamiento Matemático',
-    'Taller de Vida Activa y Salud',
-    'Especialidad Técnico-Profesional / Laboral'
-  ];
-
   /**
    * Regla de redondeo de notas:
    * "los promedios siempre van con dos decimales en donde corre la aproximación entre ellos
@@ -84,7 +63,6 @@
     if (val === null || val === undefined || isNaN(val) || val === '') return null;
     const num = Number(val);
     if (isNaN(num)) return null;
-    // Redondeo al primer decimal a partir del segundo decimal (>= 5 aproxima hacia arriba)
     return Math.round((num + Number.EPSILON) * 10) / 10;
   }
 
@@ -92,6 +70,51 @@
     const rounded = roundToChileanGrade(val);
     if (rounded === null) return '-';
     return rounded.toFixed(1).replace('.', ',');
+  }
+
+  /**
+   * Conversión a escala conceptual oficial:
+   * Notas de 1.0 a 3.9: I (Insuficiente)
+   * Notas de 4.0 a 4.9: S (Suficiente)
+   * Notas de 5.0 a 5.9: B (Bien)
+   * Notas de 6.0 a 7.0: MB (Muy Bien)
+   */
+  function convertToConcept(val) {
+    if (val === null || val === undefined || isNaN(val) || val === '') return '-';
+    const num = roundToChileanGrade(val);
+    if (num === null || num < 1.0) return '-';
+    if (num < 4.0) return 'I';
+    if (num < 5.0) return 'S';
+    if (num < 6.0) return 'B';
+    return 'MB';
+  }
+
+  function getConceptDescription(concept) {
+    switch (String(concept || '').toUpperCase().trim()) {
+      case 'I': return 'Insuficiente (1,0 a 3,9)';
+      case 'S': return 'Suficiente (4,0 a 4,9)';
+      case 'B': return 'Bien (5,0 a 5,9)';
+      case 'MB': return 'Muy Bien (6,0 a 7,0)';
+      default: return '';
+    }
+  }
+
+  function getConceptBadgeClass(concept) {
+    switch (String(concept || '').toUpperCase().trim()) {
+      case 'I': return 'concept-insuficiente';
+      case 'S': return 'concept-suficiente';
+      case 'B': return 'concept-bien';
+      case 'MB': return 'concept-muybien';
+      default: return '';
+    }
+  }
+
+  /**
+   * Detecta si una asignatura por su nombre suele ser conceptual (Orientación o Religión)
+   */
+  function isTypicallyConceptual(name) {
+    const clean = String(name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return clean.includes('orientacion') || clean.includes('religion');
   }
 
   class EducationalDB {
@@ -123,6 +146,9 @@
       if (!localStorage.getItem(DB_KEYS.ATTENDANCE)) {
         localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify([]));
       }
+      if (!localStorage.getItem(DB_KEYS.COURSE_SUBJECTS)) {
+        localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify({}));
+      }
     }
 
     // --- CONFIGURACIÓN INSTITUCIONAL ---
@@ -143,12 +169,145 @@
       return updated;
     }
 
+    getProfesorJefeForCourse(nivel) {
+      const config = this.getConfig();
+      const map = config.profesoresJefe || {};
+      return (map[nivel] && map[nivel].trim()) ? map[nivel].trim() : (config.profesorJefe || 'Profesor(a) Jefe');
+    }
+
+    saveProfesorJefeForCourse(nivel, nombre) {
+      const config = this.getConfig();
+      if (!config.profesoresJefe) config.profesoresJefe = {};
+      config.profesoresJefe[nivel] = (nombre || '').trim();
+      return this.saveConfig(config);
+    }
+
+    saveAllProfesoresJefe(map) {
+      const config = this.getConfig();
+      config.profesoresJefe = { ...(config.profesoresJefe || {}), ...map };
+      return this.saveConfig(config);
+    }
+
+    // --- ASIGNATURAS POR CURSO (GESTIÓN PERSONALIZADA) ---
+    getAllCourseSubjectsMap() {
+      try {
+        return JSON.parse(localStorage.getItem(DB_KEYS.COURSE_SUBJECTS)) || {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    getSubjectsForCourse(nivel) {
+      const map = this.getAllCourseSubjectsMap();
+      const list = map[nivel] || [];
+      // Ordenar por campo 'orden'
+      return list.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    }
+
+    saveSubjectForCourse(nivel, subjectData) {
+      const map = this.getAllCourseSubjectsMap();
+      if (!map[nivel]) map[nivel] = [];
+
+      const list = map[nivel];
+      let saved;
+
+      const incide = subjectData.incideEnPromedio !== undefined ? Boolean(subjectData.incideEnPromedio) : true;
+      const conceptual = subjectData.esConceptual !== undefined 
+        ? Boolean(subjectData.esConceptual) 
+        : isTypicallyConceptual(subjectData.nombre);
+
+      if (subjectData.id) {
+        const idx = list.findIndex(s => s.id === subjectData.id);
+        if (idx !== -1) {
+          list[idx] = {
+            ...list[idx],
+            nombre: subjectData.nombre.trim(),
+            incideEnPromedio: incide,
+            esConceptual: conceptual
+          };
+          saved = list[idx];
+        } else {
+          saved = {
+            id: subjectData.id,
+            nombre: subjectData.nombre.trim(),
+            incideEnPromedio: incide,
+            esConceptual: conceptual,
+            orden: list.length + 1
+          };
+          list.push(saved);
+        }
+      } else {
+        saved = {
+          id: 'asg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          nombre: subjectData.nombre.trim(),
+          incideEnPromedio: incide,
+          esConceptual: conceptual,
+          orden: list.length + 1
+        };
+        list.push(saved);
+      }
+
+      map[nivel] = list;
+      localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('subjects_updated', { detail: { nivel, subject: saved } }));
+      return saved;
+    }
+
+    deleteSubjectForCourse(nivel, subjectId) {
+      const map = this.getAllCourseSubjectsMap();
+      if (!map[nivel]) return;
+
+      map[nivel] = map[nivel].filter(s => s.id !== subjectId);
+      // Reindexar orden
+      map[nivel].forEach((s, idx) => { s.orden = idx + 1; });
+
+      localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('subjects_updated', { detail: { nivel, deletedId: subjectId } }));
+    }
+
+    reorderCourseSubjects(nivel, subjectIds) {
+      const map = this.getAllCourseSubjectsMap();
+      if (!map[nivel]) return;
+
+      const subjectMap = new Map(map[nivel].map(s => [s.id, s]));
+      const reordered = [];
+
+      subjectIds.forEach((id, idx) => {
+        if (subjectMap.has(id)) {
+          const s = subjectMap.get(id);
+          s.orden = idx + 1;
+          reordered.push(s);
+        }
+      });
+
+      map[nivel] = reordered;
+      localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('subjects_updated', { detail: { nivel } }));
+    }
+
+    copySubjectsBetweenCourses(fromNivel, toNivel) {
+      const sourceList = this.getSubjectsForCourse(fromNivel);
+      if (sourceList.length === 0) return 0;
+
+      const map = this.getAllCourseSubjectsMap();
+      map[toNivel] = sourceList.map((s, idx) => ({
+        id: 'asg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6) + '_' + idx,
+        nombre: s.nombre,
+        incideEnPromedio: s.incideEnPromedio,
+        esConceptual: s.esConceptual,
+        orden: idx + 1
+      }));
+
+      localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('subjects_updated', { detail: { nivel: toNivel } }));
+      return map[toNivel].length;
+    }
+
     // --- ESTUDIANTES ---
     getStudents(filterNivel = null) {
       try {
         const data = JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS)) || [];
         let students = filterNivel ? data.filter(s => s.nivel === filterNivel) : data;
-        // Ordenar alfabéticamente por Apellido Paterno, Apellido Materno y Nombres
         return students.sort((a, b) => {
           const apA = `${a.apellidoPaterno || ''} ${a.apellidoMaterno || ''} ${a.nombres || ''}`.trim().toLowerCase();
           const apB = `${b.apellidoPaterno || ''} ${b.apellidoMaterno || ''} ${b.nombres || ''}`.trim().toLowerCase();
@@ -192,7 +351,6 @@
     deleteStudent(id) {
       const students = this.getStudents().filter(s => s.id !== id);
       localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
-      // Cascada: Eliminar calificaciones y asistencia del alumno
       this.deleteGradesByStudent(id);
       this.deleteAttendanceByStudent(id);
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { deletedId: id } }));
@@ -278,11 +436,38 @@
     }
 
     /**
-     * Calcula el Promedio General del Estudiante (todas las asignaturas que tienen promedio)
+     * Calcula el Promedio General del Estudiante:
+     * REGLA CLAVE: Solo considera asignaturas que INCIDEN en el promedio final (incideEnPromedio: true)
+     * y que utilizan escala numérica (no conceptuales como Orientación o Religión).
      */
     getStudentGeneralAverage(studentId) {
+      const student = this.getStudentById(studentId);
+      if (!student) return null;
+
+      const courseSubjects = this.getSubjectsForCourse(student.nivel);
+      // Mapa de asignaturas que inciden en el promedio
+      const incidentSubjectsMap = new Map();
+      
+      if (courseSubjects && courseSubjects.length > 0) {
+        courseSubjects.forEach(s => {
+          // Solo incide si incideEnPromedio !== false y no es conceptual
+          if (s.incideEnPromedio !== false && !s.esConceptual) {
+            incidentSubjectsMap.set(s.nombre, true);
+          }
+        });
+      }
+
       const studentGrades = this.getGradesByStudent(studentId);
+      
       const promedios = studentGrades
+        .filter(g => {
+          // Si hay configuración de curso, verificar que incida
+          if (incidentSubjectsMap.size > 0) {
+            return incidentSubjectsMap.has(g.subject);
+          }
+          // Si no hay configuración de curso aún, excluir las típicamente conceptuales
+          return !isTypicallyConceptual(g.subject);
+        })
         .map(g => g.promedio)
         .filter(p => p !== null && !isNaN(p));
 
@@ -350,9 +535,10 @@
 
     exportBackup() {
       return {
-        version: '1.0',
+        version: '1.2',
         timestamp: new Date().toISOString(),
         config: this.getConfig(),
+        courseSubjects: this.getAllCourseSubjectsMap(),
         students: this.getStudents(),
         grades: this.getAllGrades(),
         attendance: this.getAllAttendance()
@@ -362,6 +548,7 @@
     importBackup(backupData) {
       if (!backupData) return false;
       if (backupData.config) localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify(backupData.config));
+      if (backupData.courseSubjects) localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(backupData.courseSubjects));
       if (backupData.students) localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(backupData.students));
       if (backupData.grades) localStorage.setItem(DB_KEYS.GRADES, JSON.stringify(backupData.grades));
       if (backupData.attendance) localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify(backupData.attendance));
@@ -374,9 +561,12 @@
 
   return {
     NIVELES_DISPONIBLES,
-    ASIGNATURAS_CATALOGO,
     roundToChileanGrade,
     formatGrade,
+    convertToConcept,
+    getConceptDescription,
+    getConceptBadgeClass,
+    isTypicallyConceptual,
     EducationalDB,
     db
   };

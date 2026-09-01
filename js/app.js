@@ -43,6 +43,7 @@
 
     // 2. Instanciar módulos de vista
     window.configView = new window.ConfigView();
+    window.subjectsView = new window.SubjectsView();
     window.studentsView = new window.StudentsView();
     window.gradesView = new window.GradesView();
     window.attendanceView = new window.AttendanceView();
@@ -82,11 +83,17 @@
           window.reportGenerator.updateStudentDropdown();
           window.reportGenerator.renderPreview();
         } else if (targetViewId === 'grades-view') {
+          window.gradesView.updateSubjectDropdown();
           window.gradesView.render();
+        } else if (targetViewId === 'subjects-view') {
+          window.subjectsView.render();
         } else if (targetViewId === 'attendance-view') {
           window.attendanceView.render();
         } else if (targetViewId === 'students-view') {
           window.studentsView.render();
+        } else if (targetViewId === 'config-view') {
+          window.configView.loadData();
+          window.configView.renderProfesoresJefeTable();
         }
       });
     });
