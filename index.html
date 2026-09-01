@@ -12,6 +12,9 @@
 
   <!-- html2pdf.js para exportación directa a archivo PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- SheetJS (xlsx) para importación y exportación de planillas Excel (.xlsx, .xls, .csv) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -240,6 +243,12 @@
           <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
             <button class="btn btn-primary" id="btn-new-student">
               ➕ Matricular Nuevo Estudiante
+            </button>
+            <button class="btn btn-success" id="btn-open-bulk-import" title="Cargar lista de estudiantes desde planilla Excel (.xlsx, .xls) o CSV">
+              📥 Carga Masiva (Excel / CSV)
+            </button>
+            <button class="btn btn-secondary" id="btn-download-excel-template" title="Descargar planilla modelo con el formato oficial de columnas y niveles">
+              📄 Descargar Plantilla Excel
             </button>
           </div>
         </div>
@@ -472,6 +481,80 @@
           <button type="submit" class="btn btn-primary">💾 Guardar Estudiante</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE CARGA MASIVA DE ESTUDIANTES (EXCEL / CSV) -->
+  <div class="modal-backdrop" id="bulk-import-modal">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <h3 id="bulk-modal-title">📥 Carga Masiva de Estudiantes (Excel / CSV)</h3>
+        <button type="button" class="modal-close-btn" id="bulk-modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- ZONA DE CARGA DE ARCHIVO (DRAG AND DROP) -->
+        <div class="dropzone" id="excel-dropzone">
+          <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display: none;" />
+          <div class="dropzone-icon">📊</div>
+          <p><strong>Haga clic aquí</strong> o arrastre su archivo <strong>Excel (.xlsx, .xls)</strong> o <strong>CSV</strong></p>
+          <p style="font-size: 0.78rem; color: #64748b; margin-top: 0.35rem;">
+            Formatos soportados: Columnas <em>RUT, DV, Nombres, Apellido Paterno, Apellido Materno, Nivel</em> (o RUT completo con guión).
+          </p>
+        </div>
+
+        <!-- BARRA DE ACCIÓN Y PLANTILLA -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <span style="font-size: 0.8rem; color: #475569;">¿No tienes el formato?</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-download-modal-template">
+            📄 Descargar Plantilla Oficial Excel
+          </button>
+        </div>
+
+        <!-- SECCIÓN DE VISTA PREVIA TRAS SUBIR EL ARCHIVO -->
+        <div id="bulk-preview-section" style="display: none; margin-top: 1.25rem;">
+          <div class="import-summary-bar">
+            <span>Total filas: <strong id="import-total-count">0</strong></span>
+            <span style="color: #059669;">Válidos: <strong id="import-valid-count">0</strong></span>
+            <span style="color: #dc2626;">Con errores: <strong id="import-error-count">0</strong></span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label for="import-mode-select">Modalidad de Importación:</label>
+            <select id="import-mode-select" class="form-control">
+              <option value="merge">Conservar existentes y agregar / actualizar por RUT</option>
+              <option value="replace_course">Reemplazar nómina de los cursos contenidos en la planilla</option>
+            </select>
+          </div>
+
+          <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">
+            Vista Previa de Estudiantes Detectados:
+          </label>
+          <div class="import-preview-table-wrapper">
+            <table class="grades-grid-table" style="min-width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 35px;">#</th>
+                  <th style="width: 95px;">Estado</th>
+                  <th style="width: 110px;">RUT</th>
+                  <th>Ap. Paterno</th>
+                  <th>Ap. Materno</th>
+                  <th>Nombres</th>
+                  <th>Nivel Detectado</th>
+                </tr>
+              </thead>
+              <tbody id="import-preview-table-body">
+                <!-- Filas detectadas -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="bulk-modal-cancel-btn">Cancelar</button>
+        <button type="button" class="btn btn-success" id="btn-execute-import" disabled>
+          ✅ Confirmar e Importar Estudiantes
+        </button>
+      </div>
     </div>
   </div>
 
