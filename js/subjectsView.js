@@ -20,16 +20,22 @@
   const db = dbModule.db;
   const isTypicallyConceptual = dbModule.isTypicallyConceptual;
   const CATALOGO_SIGE = dbModule.CATALOGO_SIGE || [];
+  const NIVELES_DISPONIBLES = dbModule.NIVELES_DISPONIBLES || [];
 
   class SubjectsView {
     constructor() {
-      // 1. Elementos de Creación y Gestión de Cursos
+      // 1. Elementos de Creación y Gestión de Cursos (Panel Plegable)
       this.courseForm = document.getElementById('course-add-form');
       this.courseNameInput = document.getElementById('course-input-name');
       this.courseProfesorInput = document.getElementById('course-input-profesor');
       this.coursesTableBody = document.getElementById('courses-table-body');
       this.coursesTotalBadge = document.getElementById('courses-total-badge');
       this.btnLoadOfficialCatalog = document.getElementById('btn-load-official-catalog');
+      this.courseFormToggleHeader = document.getElementById('course-form-toggle-header');
+      this.courseFormCollapseBody = document.getElementById('course-form-collapse-body');
+      this.courseFormToggleIcon = document.getElementById('course-form-toggle-icon');
+      this.coursePjAutofillIndicator = document.getElementById('course-pj-autofill-indicator');
+      this.courseDatalistCatalog = document.getElementById('course-datalist-catalog');
 
       // 2. Elementos de Asignaturas por Curso
       this.nivelSelect = document.getElementById('subjects-select-nivel');
@@ -53,6 +59,7 @@
     }
 
     init() {
+      this.populateCourseDatalist();
       this.populateCatalogSelect();
       this.populateNivelSelects();
       this.initEvents();
@@ -89,6 +96,13 @@
           this.renderSubjects();
         }
       });
+    }
+
+    populateCourseDatalist() {
+      if (!this.courseDatalistCatalog) return;
+      this.courseDatalistCatalog.innerHTML = NIVELES_DISPONIBLES.map(n => 
+        `<option value="${escapeHtml(n)}">`
+      ).join('');
     }
 
     populateCatalogSelect() {
@@ -145,6 +159,45 @@
     }
 
     initEvents() {
+      // 0. Alternar plegado / despliegue del formulario de registro de nuevo curso
+      if (this.courseFormToggleHeader && this.courseFormCollapseBody) {
+        this.courseFormToggleHeader.addEventListener('click', () => {
+          const isCollapsed = this.courseFormCollapseBody.style.display === 'none';
+          this.courseFormCollapseBody.style.display = isCollapsed ? 'block' : 'none';
+          if (this.courseFormToggleIcon) {
+            this.courseFormToggleIcon.textContent = isCollapsed ? '▼' : '▶';
+          }
+        });
+      }
+
+      // 0.1. Identificar y autocompletar de inmediato el Profesor(a) Jefe al escribir o elegir curso
+      if (this.courseNameInput) {
+        const detectTeacherImmediate = () => {
+          const val = this.courseNameInput.value.trim();
+          if (!val) {
+            if (this.coursePjAutofillIndicator) this.coursePjAutofillIndicator.style.display = 'none';
+            return;
+          }
+          const known = db.findKnownProfesorJefe(val);
+          if (known && known !== 'Profesor(a) Jefe') {
+            if (this.courseProfesorInput) {
+              this.courseProfesorInput.value = known;
+            }
+            if (this.coursePjAutofillIndicator) {
+              this.coursePjAutofillIndicator.textContent = `✓ Docente titular: ${known}`;
+              this.coursePjAutofillIndicator.style.display = 'inline';
+            }
+          } else {
+            if (this.coursePjAutofillIndicator) this.coursePjAutofillIndicator.style.display = 'none';
+          }
+        };
+
+        this.courseNameInput.addEventListener('input', detectTeacherImmediate);
+        this.courseNameInput.addEventListener('change', detectTeacherImmediate);
+        this.courseNameInput.addEventListener('blur', detectTeacherImmediate);
+        this.courseNameInput.addEventListener('keyup', detectTeacherImmediate);
+      }
+
       // 1. Crear nuevo curso
       if (this.courseForm) {
         this.courseForm.addEventListener('submit', (e) => {
@@ -207,8 +260,8 @@
         });
       }
 
-      // Copiar asignaturas desde otro curso
-      if (this.btnCopySubjects) {
+      // 5. Copiar asignaturas desde otro curso
+      if (this.btnCopySubjects && this.copyFromSelect) {
         this.btnCopySubjects.addEventListener('click', () => {
           this.handleCopySubjects();
         });
@@ -228,6 +281,7 @@
       if (created) {
         if (this.courseNameInput) this.courseNameInput.value = '';
         if (this.courseProfesorInput) this.courseProfesorInput.value = '';
+        if (this.coursePjAutofillIndicator) this.coursePjAutofillIndicator.style.display = 'none';
         this.currentNivel = created.nombre;
         if (this.nivelSelect) this.nivelSelect.value = created.nombre;
         this.updateCoursePjBadge();
@@ -259,7 +313,13 @@
       this.coursesTableBody.innerHTML = courses.map((c, idx) => {
         const subjectsCount = db.getSubjectsForCourse(c.nombre).length;
         const studentsCount = db.getStudents(c.nombre).length;
-        const pjDisplay = c.profesorJefe && c.profesorJefe.trim() ? c.profesorJefe.trim() : '<em style="color: #94a3b8;">Sin profesor asignado</em>';
+        
+        // Resolver siempre el profesor jefe asignado (incluso si fue asignado en Membrete o previamente)
+        const resolvedPj = db.getProfesorJefeForCourse(c.nombre);
+        const hasPj = resolvedPj && resolvedPj.trim() !== '' && resolvedPj !== 'Profesor(a) Jefe';
+        const pjDisplay = hasPj 
+          ? `<span style="font-weight: 700; color: #166534;">${escapeHtml(resolvedPj)}</span>` 
+          : '<em style="color: #94a3b8;">Sin profesor asignado</em>';
 
         return `
           <tr>

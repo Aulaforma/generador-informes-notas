@@ -207,28 +207,61 @@
           </div>
         </div>
 
-        <!-- FORMULARIO CREAR CURSO -->
-        <div class="card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.25rem; padding: 1.2rem;">
-          <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem;">
-            ➕ Registrar Nuevo Curso
-          </h3>
-          <form id="course-add-form">
-            <div style="display: grid; grid-template-columns: 1.5fr 1.5fr auto; gap: 1rem; align-items: flex-end;">
-              <div class="form-group">
-                <label for="course-input-name">Nombre del Curso / Nivel: <span class="required-star">*</span></label>
-                <input type="text" id="course-input-name" class="form-control" required placeholder="Ej: Primero Básico A, Kínder, 4° Medio Científico..." />
-              </div>
-              <div class="form-group">
-                <label for="course-input-profesor">Profesor(a) Jefe Titular Asignado:</label>
-                <input type="text" id="course-input-profesor" class="form-control" placeholder="Ej: Prof. Carmen Gloria Muñoz..." />
-              </div>
-              <div>
-                <button type="submit" class="btn btn-primary" style="height: 38px;">
-                  ➕ Crear Curso
-                </button>
-              </div>
+        <!-- FORMULARIO CREAR CURSO (PLEGABLE / COLAPSABLE) -->
+        <div class="card collapsible-card" id="card-register-course" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.25rem; padding: 0; overflow: hidden;">
+          <div id="course-form-toggle-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 1.2rem; cursor: pointer; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; user-select: none;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-size: 1.15rem;">➕</span>
+              <h3 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin: 0;">
+                Registrar Nuevo Curso
+              </h3>
+              <span style="font-size: 0.78rem; color: #64748b; background: #ffffff; border: 1px solid #cbd5e1; padding: 0.15rem 0.5rem; border-radius: 4px;">
+                Plegable (clic para ocultar / mostrar)
+              </span>
             </div>
-          </form>
+            <span id="course-form-toggle-icon" style="font-size: 0.9rem; font-weight: 800; color: #1e3a8a; transition: transform 0.2s ease;">
+              ▼
+            </span>
+          </div>
+
+          <div id="course-form-collapse-body" style="padding: 1.2rem; display: block;">
+            <form id="course-add-form">
+              <div style="display: grid; grid-template-columns: 1.5fr 1.5fr auto; gap: 1rem; align-items: flex-end;">
+                <div class="form-group">
+                  <label for="course-input-name">Nombre del Curso / Nivel: <span class="required-star">*</span></label>
+                  <input 
+                    type="text" 
+                    id="course-input-name" 
+                    class="form-control" 
+                    required 
+                    list="course-datalist-catalog"
+                    placeholder="Escriba o elija ej: Segundo Medio A, Cuarto Medio B..." 
+                    autocomplete="off"
+                  />
+                  <datalist id="course-datalist-catalog">
+                    <!-- Poblado dinámicamente desde subjectsView.js con los 27 niveles oficiales -->
+                  </datalist>
+                </div>
+                <div class="form-group">
+                  <label for="course-input-profesor">
+                    Profesor(a) Jefe Titular:
+                    <span id="course-pj-autofill-indicator" style="font-size: 0.75rem; color: #059669; font-weight: 600; display: none;">✓ Identificado automáticamente</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    id="course-input-profesor" 
+                    class="form-control" 
+                    placeholder="Se autocompleta de inmediato al identificar el curso..." 
+                  />
+                </div>
+                <div>
+                  <button type="submit" class="btn btn-primary" style="height: 38px;">
+                    ➕ Crear Curso
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
 
         <!-- TABLA DE CURSOS CREADOS -->

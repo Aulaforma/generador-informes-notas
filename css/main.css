@@ -241,6 +241,24 @@ body {
   color: var(--text-secondary);
 }
 
+/* PLEGABLE / COLLAPSIBLE CARDS */
+.collapsible-card {
+  transition: all 0.2s ease;
+}
+
+#course-form-toggle-header:hover {
+  background: #e2e8f0 !important;
+}
+
+.highlight-autofill {
+  animation: autofillPulse 1.2s ease;
+}
+
+@keyframes autofillPulse {
+  0% { background-color: #dcfce7; border-color: #22c55e; }
+  100% { background-color: #ffffff; border-color: #cbd5e1; }
+}
+
 /* BUTTONS */
 .btn {
   display: inline-flex;

@@ -236,6 +236,23 @@
           ];
           localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
         }
+
+        // Sincronizar automáticamente con profesores jefe asignados previamente
+        let updated = false;
+        courses.forEach(c => {
+          if (!c.profesorJefe || !c.profesorJefe.trim()) {
+            const known = this.findKnownProfesorJefe(c.nombre);
+            if (known) {
+              c.profesorJefe = known;
+              updated = true;
+            }
+          }
+        });
+
+        if (updated) {
+          localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+        }
+
         return courses.sort((a, b) => (a.orden || 0) - (b.orden || 0));
       } catch (e) {
         return [];
@@ -252,16 +269,74 @@
 
     getCourseByName(nombre) {
       if (!nombre) return null;
-      const clean = nombre.trim().toLowerCase();
-      return this.getCourses().find(c => c.nombre.trim().toLowerCase() === clean) || null;
+      const clean = normalizeCourseString(nombre);
+      return this.getCourses().find(c => normalizeCourseString(c.nombre) === clean) || null;
+    }
+
+    /**
+     * Busca de forma inteligente y normalizada si existe un Profesor(a) Jefe
+     * previamente asignado para un curso en la configuración global o cursos existentes.
+     * Soporta coincidencias exactas, insensibles a mayúsculas/minúsculas, tildes,
+     * y equivalencias como "Segundo medio" <-> "Segundo Medio A".
+     */
+    findKnownProfesorJefe(nombreCurso) {
+      if (!nombreCurso || !nombreCurso.trim()) return '';
+      const targetClean = normalizeCourseString(nombreCurso);
+
+      const config = this.getConfig();
+      const map = config.profesoresJefe || {};
+
+      // 1. Coincidencia exacta en config.profesoresJefe
+      if (map[nombreCurso] && map[nombreCurso].trim()) {
+        return map[nombreCurso].trim();
+      }
+
+      // 2. Coincidencia normalizada exacta en config.profesoresJefe
+      for (const key of Object.keys(map)) {
+        if (map[key] && map[key].trim()) {
+          if (normalizeCourseString(key) === targetClean) {
+            return map[key].trim();
+          }
+        }
+      }
+
+      // 3. Coincidencia parcial / prefijo (ej: "Segundo medio" coincide con "Segundo Medio A")
+      for (const key of Object.keys(map)) {
+        if (map[key] && map[key].trim()) {
+          const keyClean = normalizeCourseString(key);
+          if (keyClean.startsWith(targetClean) || targetClean.startsWith(keyClean)) {
+            return map[key].trim();
+          }
+        }
+      }
+
+      // 4. Buscar en los cursos guardados en DB
+      try {
+        const rawCourses = JSON.parse(localStorage.getItem(DB_KEYS.COURSES)) || [];
+        for (const c of rawCourses) {
+          if (c.profesorJefe && c.profesorJefe.trim()) {
+            const cClean = normalizeCourseString(c.nombre);
+            if (cClean === targetClean || cClean.startsWith(targetClean) || targetClean.startsWith(cClean)) {
+              return c.profesorJefe.trim();
+            }
+          }
+        }
+      } catch (e) {}
+
+      return '';
     }
 
     saveCourse(courseData) {
       const courses = this.getCourses();
       const nombre = (courseData.nombre || '').trim();
-      const profesorJefe = (courseData.profesorJefe || '').trim();
+      let profesorJefe = (courseData.profesorJefe || '').trim();
 
       if (!nombre) return null;
+
+      // Si no se proporcionó profesor jefe, buscar si ya había sido asignado previamente
+      if (!profesorJefe) {
+        profesorJefe = this.findKnownProfesorJefe(nombre);
+      }
 
       let saved = null;
       if (courseData.id) {
@@ -280,7 +355,8 @@
           }
         }
       } else {
-        const existing = courses.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
+        const targetClean = normalizeCourseString(nombre);
+        const existing = courses.find(c => normalizeCourseString(c.nombre) === targetClean);
         if (existing) {
           existing.profesorJefe = profesorJefe || existing.profesorJefe;
           saved = existing;
@@ -293,6 +369,14 @@
           };
           courses.push(saved);
         }
+      }
+
+      // Sincronizar también con config.profesoresJefe para persistencia institucional
+      if (profesorJefe) {
+        const config = this.getConfig();
+        if (!config.profesoresJefe) config.profesoresJefe = {};
+        config.profesoresJefe[nombre] = profesorJefe;
+        this.saveConfig(config);
       }
 
       localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
@@ -334,16 +418,19 @@
 
     loadOfficialCoursesCatalog() {
       const currentCourses = this.getCourses();
-      const existingNames = new Set(currentCourses.map(c => c.nombre.toLowerCase()));
+      const existingNames = new Set(currentCourses.map(c => normalizeCourseString(c.nombre)));
 
       NIVELES_DISPONIBLES.forEach((n, idx) => {
-        if (!existingNames.has(n.toLowerCase())) {
+        const nClean = normalizeCourseString(n);
+        if (!existingNames.has(nClean)) {
+          const knownPj = this.findKnownProfesorJefe(n);
           currentCourses.push({
             id: 'cur_cat_' + (idx + 1),
             nombre: n,
-            profesorJefe: '',
+            profesorJefe: knownPj || '',
             orden: currentCourses.length + 1
           });
+          existingNames.add(nClean);
         }
       });
 
@@ -358,21 +445,25 @@
       if (course && course.profesorJefe && course.profesorJefe.trim()) {
         return course.profesorJefe.trim();
       }
+      const known = this.findKnownProfesorJefe(nivel);
+      if (known) return known;
       const config = this.getConfig();
-      const map = config.profesoresJefe || {};
-      return (map[nivel] && map[nivel].trim()) ? map[nivel].trim() : (config.profesorJefe || 'Profesor(a) Jefe');
+      return config.profesorJefe || 'Profesor(a) Jefe';
     }
 
     saveProfesorJefeForCourse(nivel, nombre) {
+      const cleanPj = (nombre || '').trim();
       const course = this.getCourseByName(nivel);
       if (course) {
-        course.profesorJefe = (nombre || '').trim();
-        return this.saveCourse(course);
+        course.profesorJefe = cleanPj;
+        this.saveCourse(course);
       }
       const config = this.getConfig();
       if (!config.profesoresJefe) config.profesoresJefe = {};
-      config.profesoresJefe[nivel] = (nombre || '').trim();
-      return this.saveConfig(config);
+      config.profesoresJefe[nivel] = cleanPj;
+      this.saveConfig(config);
+      window.dispatchEvent(new CustomEvent('courses_updated', { detail: { nivel, profesorJefe: cleanPj } }));
+      return config;
     }
 
     saveAllProfesoresJefe(map) {
@@ -380,21 +471,29 @@
       let modified = false;
 
       Object.keys(map).forEach(nivel => {
-        const c = courses.find(item => item.nombre.toLowerCase() === nivel.toLowerCase());
-        if (c) {
-          c.profesorJefe = (map[nivel] || '').trim();
-          modified = true;
-        }
+        const prof = (map[nivel] || '').trim();
+        if (!prof) return;
+
+        const targetClean = normalizeCourseString(nivel);
+        courses.forEach(c => {
+          const cClean = normalizeCourseString(c.nombre);
+          if (cClean === targetClean || cClean.startsWith(targetClean) || targetClean.startsWith(cClean)) {
+            c.profesorJefe = prof;
+            modified = true;
+          }
+        });
       });
 
       if (modified) {
         localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
-        window.dispatchEvent(new CustomEvent('courses_updated', { detail: map }));
       }
 
       const config = this.getConfig();
       config.profesoresJefe = { ...(config.profesoresJefe || {}), ...map };
-      return this.saveConfig(config);
+      this.saveConfig(config);
+
+      window.dispatchEvent(new CustomEvent('courses_updated', { detail: map }));
+      return config;
     }
 
     // --- ASIGNATURAS POR CURSO (GESTIÓN PERSONALIZADA) ---
@@ -830,6 +929,7 @@
     getConceptDescription,
     getConceptBadgeClass,
     isTypicallyConceptual,
+    normalizeCourseString,
     EducationalDB,
     db
   };
