@@ -49,6 +49,7 @@
       this.importErrorCount = document.getElementById('import-error-count');
       this.importModeSelect = document.getElementById('import-mode-select');
       this.btnExecuteImport = document.getElementById('btn-execute-import');
+      this.bulkImportNotice = document.getElementById('bulk-import-notice');
 
       this.currentEditId = null;
       this.parsedStudentsToImport = [];
@@ -61,13 +62,21 @@
       this.initEvents();
       this.render();
 
+      let studentsDebounceTimer = null;
+      const debouncedRender = () => {
+        if (studentsDebounceTimer) clearTimeout(studentsDebounceTimer);
+        studentsDebounceTimer = setTimeout(() => {
+          this.render();
+        }, 50);
+      };
+
       window.addEventListener('students_updated', () => {
-        this.render();
+        debouncedRender();
       });
 
       window.addEventListener('courses_updated', () => {
         this.populateNivelesDropdowns();
-        this.render();
+        debouncedRender();
       });
     }
 
@@ -367,6 +376,10 @@
     openBulkModal() {
       this.parsedStudentsToImport = [];
       if (this.bulkPreviewSection) this.bulkPreviewSection.style.display = 'none';
+      if (this.bulkImportNotice) {
+        this.bulkImportNotice.style.display = 'none';
+        this.bulkImportNotice.innerHTML = '';
+      }
       if (this.btnExecuteImport) this.btnExecuteImport.disabled = true;
       if (this.excelFileInput) this.excelFileInput.value = '';
       if (this.bulkModal) this.bulkModal.classList.add('active');
@@ -374,6 +387,10 @@
 
     closeBulkModal() {
       if (this.bulkModal) this.bulkModal.classList.remove('active');
+      if (this.bulkImportNotice) {
+        this.bulkImportNotice.style.display = 'none';
+        this.bulkImportNotice.innerHTML = '';
+      }
       this.parsedStudentsToImport = [];
     }
 
@@ -465,15 +482,28 @@
             const companionMatch = textPreview.match(/src=["']([^"']*sheet001[^"']*)["']/i);
             const sheetPath = companionMatch ? companionMatch[1] : 'sheet001.htm';
 
-            alert(
-              `⚠️ AVISO SOBRE EL ARCHIVO "${file.name}":\n\n` +
-              `Este archivo fue exportado por el SIGE como un "Marco Web" (pesa apenas ~10 KB) y no contiene la tabla de estudiantes dentro de sí mismo.\n\n` +
-              `La nómina real con todos los alumnos está en el archivo:\n` +
-              `📁 "${sheetPath}" (que se descargó junto con él en su carpeta de Descargas).\n\n` +
-              `👉 CÓMO CARGARLO FÁCILMENTE:\n` +
-              `1. Haga clic de nuevo en el botón de carga y seleccione directamente "${sheetPath}". ¡El sistema lo leerá de inmediato!\n\n` +
-              `2. O abra "${file.name}" en Excel y elija "Guardar como -> Tipo: Libro de Excel (*.xlsx)", y luego suba ese archivo .xlsx.`
-            );
+            if (this.bulkImportNotice) {
+              this.bulkImportNotice.style.display = 'block';
+              this.bulkImportNotice.style.background = '#fffbeb';
+              this.bulkImportNotice.style.border = '1.5px solid #f59e0b';
+              this.bulkImportNotice.style.color = '#78350f';
+              this.bulkImportNotice.innerHTML = `
+                <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.35rem; color: #b45309;">
+                  ⚠️ Nómina Exportada como Marco Web por el SIGE
+                </div>
+                <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem;">
+                  El archivo <code>${escapeHtml(file.name)}</code> es un marco web de Excel que no contiene los datos directamente.
+                </p>
+                <div style="background: #ffffff; padding: 0.6rem 0.85rem; border-radius: 5px; border: 1px solid #fde68a; font-size: 0.85rem;">
+                  <strong>💡 Opciones para continuar de inmediato:</strong>
+                  <ul style="margin: 0.3rem 0 0 1.1rem; padding: 0;">
+                    <li>Seleccione directamente el archivo <strong><code>sheet001.htm</code></strong> (en la carpeta descargada del SIGE).</li>
+                    <li>O seleccione el archivo <strong><code>nomina_oficial_alumnos.xlsx</code></strong> que ya fue convertido a Excel estándar.</li>
+                  </ul>
+                </div>
+              `;
+            }
+            window.showToast('El archivo .xls es un marco web. Seleccione sheet001.htm o el archivo .xlsx', 'warning', 6000);
             return;
           }
 
@@ -581,14 +611,14 @@
         .replace(/[^a-z0-9]/g, "");
     }
 
-    matchNivel(rawNivel) {
+    matchNivel(rawNivel, existingCourses = null) {
       if (!rawNivel) return null;
       const clean = String(rawNivel).trim().toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
       // 0. Si ya coincide exactamente con un curso creado en el sistema
-      const existingCourses = db.getCourses();
-      for (const c of existingCourses) {
+      const courses = existingCourses || db.getCourses();
+      for (const c of courses) {
         const cClean = c.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (clean === cClean) return c.nombre;
       }
@@ -604,8 +634,8 @@
       if (clean.includes('1er nivel de transicion') || clean.includes('primer nivel de transicion') || clean.includes('transicion 1') || clean.includes('prekinder') || clean.includes('pre-kinder') || clean.includes('pk')) {
         const optionWithLetter = `Transición 1 ${letra || 'A'}`;
         const optionSimple = 'Transición 1';
-        if (existingCourses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
-        if (existingCourses.some(c => c.nombre === optionSimple)) return optionSimple;
+        if (courses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
+        if (courses.some(c => c.nombre === optionSimple)) return optionSimple;
         return letra && letra !== 'A' ? `Transición 1 ${letra}` : 'Transición 1';
       }
 
@@ -613,8 +643,8 @@
       if (clean.includes('2 nivel de transicion') || clean.includes('segundo nivel de transicion') || clean.includes('transicion 2') || clean.includes('kinder') || clean.includes(' k')) {
         const optionWithLetter = `Transición 2 ${letra || 'A'}`;
         const optionSimple = 'Transición 2';
-        if (existingCourses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
-        if (existingCourses.some(c => c.nombre === optionSimple)) return optionSimple;
+        if (courses.some(c => c.nombre === optionWithLetter)) return optionWithLetter;
+        if (courses.some(c => c.nombre === optionSimple)) return optionSimple;
         return letra && letra !== 'A' ? `Transición 2 ${letra}` : 'Transición 2';
       }
 
@@ -663,6 +693,7 @@
 
     parseAndPreviewRows(rawRows) {
       this.parsedStudentsToImport = [];
+      const existingCourses = db.getCourses();
 
       rawRows.forEach((row, idx) => {
         // Mapeo inteligente de encabezados de columna oficiales SIGE y variantes
@@ -760,7 +791,7 @@
           finalDv = calculateDV(cleanRutNum);
         }
 
-        const matchedNivel = this.matchNivel(nivelRaw);
+        const matchedNivel = this.matchNivel(nivelRaw, existingCourses);
 
         // Validación de fila
         const errors = [];
@@ -800,8 +831,8 @@
       if (this.importValidCount) this.importValidCount.textContent = valid;
       if (this.importErrorCount) this.importErrorCount.textContent = invalid;
 
-      // Renderizar filas de vista previa
-      this.importPreviewTableBody.innerHTML = this.parsedStudentsToImport.slice(0, 100).map(s => {
+      // Renderizar filas de vista previa (primeras 30 para máxima agilidad visual <5ms)
+      this.importPreviewTableBody.innerHTML = this.parsedStudentsToImport.slice(0, 30).map(s => {
         const rutStr = s.rut ? `${s.rut}-${s.dv}` : '-';
         const badge = s.isValid 
           ? `<span class="status-badge valid">Listo</span>`
