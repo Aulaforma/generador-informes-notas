@@ -816,6 +816,14 @@
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { deletedId: id } }));
     }
 
+    clearAllStudents() {
+      localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify([]));
+      localStorage.setItem(DB_KEYS.GRADES, JSON.stringify([]));
+      localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify([]));
+      window.dispatchEvent(new CustomEvent('students_updated', { detail: { cleared: true } }));
+      return true;
+    }
+
     // --- CALIFICACIONES (1ER Y 2DO SEMESTRE + PROMEDIO ANUAL) ---
     getAllGrades() {
       try {

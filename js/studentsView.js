@@ -50,6 +50,7 @@
       this.importModeSelect = document.getElementById('import-mode-select');
       this.btnExecuteImport = document.getElementById('btn-execute-import');
       this.bulkImportNotice = document.getElementById('bulk-import-notice');
+      this.btnClearAllStudents = document.getElementById('btn-clear-all-students');
 
       this.currentEditId = null;
       this.parsedStudentsToImport = [];
@@ -161,6 +162,21 @@
 
       if (this.btnDownloadModalTemplate) {
         this.btnDownloadModalTemplate.addEventListener('click', () => this.downloadExcelTemplate());
+      }
+
+      if (this.btnClearAllStudents) {
+        this.btnClearAllStudents.addEventListener('click', () => {
+          const total = db.getStudents().length;
+          if (total === 0) {
+            window.showToast('No hay estudiantes en la matrícula para eliminar', 'info');
+            return;
+          }
+          if (confirm(`¿Está seguro de eliminar a los ${total} estudiantes matriculados?\n\nEsta acción dejará la lista en 0 para que pueda volver a cargar su nómina oficial de forma limpia y corregida.`)) {
+            db.clearAllStudents();
+            window.showToast('Se han eliminado todos los estudiantes. La matrícula está lista para cargarse nuevamente.', 'warning');
+            this.render();
+          }
+        });
       }
 
       if (this.bulkModalCloseBtn) {
@@ -753,37 +769,39 @@
           }
         }
 
-        // Extracción robusta de RUT y Dígito Verificador (soporta "27581654 K", "27509561-3", etc.)
+        // Extracción robusta de RUT y Dígito Verificador (preservando los 8 dígitos completos del RUN)
         let cleanRutNum = null;
         let finalDv = '';
 
-        if (rutRaw) {
-          const cleanStr = rutRaw.replace(/\./g, '').trim();
+        // 1. Si viene columna separada de Dígito Verificador (como en SIGE oficial y planillas estándar)
+        if (dvRaw && dvRaw.trim()) {
+          finalDv = dvRaw.trim().toUpperCase();
+        }
 
-          // Caso A: Formato con guión (ej: "27581654-K" o "27581654-3")
+        if (rutRaw) {
+          const cleanStr = String(rutRaw).replace(/\./g, '').trim();
+
+          // Caso A: Formato con guión explícito (ej: "27581654-K" o "27581654-3")
           if (cleanStr.includes('-')) {
             const parts = cleanStr.split('-');
             cleanRutNum = parseInt(parts[0].replace(/[^0-9]/g, ''), 10);
-            finalDv = parts[1].trim().toUpperCase();
+            if (!finalDv && parts[1]) {
+              finalDv = parts[1].trim().toUpperCase();
+            }
           } 
-          // Caso B: El RUN trae adherido el DV al final (ej: "27581654 K", "27549612 K", "27581654K")
-          else if (/^([0-9]{7,9})\s*([0-9kK])$/i.test(cleanStr)) {
-            const match = cleanStr.match(/^([0-9]{7,9})\s*([0-9kK])$/i);
+          // Caso B: Si NO hay columna DV separada y viene espacio (ej: "27581654 K" o "27581654 3")
+          else if (!finalDv && /^([0-9]{7,8})\s+([0-9kK])$/i.test(cleanStr)) {
+            const match = cleanStr.match(/^([0-9]{7,8})\s+([0-9kK])$/i);
             cleanRutNum = parseInt(match[1], 10);
             finalDv = match[2].toUpperCase();
           } 
-          // Caso C: Solo dígitos en la columna RUN (ej: "27509561")
+          // Caso C: El RUN es el número completo (con o sin columna DV separada, ej: "27509561" o "27261973")
           else {
             const digits = cleanStr.replace(/[^0-9]/g, '');
             if (digits.length >= 7) {
               cleanRutNum = parseInt(digits, 10);
             }
           }
-        }
-
-        // Si la columna "Dígito Ver." tiene valor válido, la usamos o confirmamos
-        if (dvRaw && dvRaw.trim()) {
-          finalDv = dvRaw.trim().toUpperCase();
         }
 
         // Si aún no tenemos DV y el RUT numérico es válido, calcularlo con Módulo 11 oficial
