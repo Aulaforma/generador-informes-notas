@@ -248,32 +248,8 @@
       const noIncide = subConfig ? subConfig.incideEnPromedio === false : false;
       const isConceptual = subConfig ? subConfig.esConceptual : isTypicallyConceptual(this.currentSubject);
 
-      // Actualizar banner informativo
-      if (this.subjectInfoBanner) {
-        if (this.currentSubject) {
-          const semTag = `<span class="header-badge-tag" style="background: ${this.currentSemestre === 1 ? '#dbeafe' : '#ffedd5'}; color: ${this.currentSemestre === 1 ? '#1e40af' : '#9a3412'}; font-weight: 700;">📅 ${this.currentSemestre}° Semestre Activo</span>`;
-          const codeTag = subConfig && subConfig.codigo ? `<span class="header-badge-tag" style="background: #e2e8f0; color: #1e293b; font-family: monospace; font-weight: 700;">Cód. ${escapeHtml(subConfig.codigo)}</span>` : '';
-          const incideTag = noIncide 
-            ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">⚠️ No incide en promedio final (*)</span>` 
-            : `<span class="header-badge-tag" style="background: #ecfdf5; color: #065f46; font-weight: 600;">✓ Incide en promedio general</span>`;
-          const conceptTag = isConceptual
-            ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I: 1.0-3.9 | S: 4.0-4.9 | B: 5.0-5.9 | MB: 6.0-7.0)</span>`
-            : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 a 7.0)</span>`;
-
-          this.subjectInfoBanner.innerHTML = `
-            ${semTag}
-            ${codeTag}
-            <strong style="color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(this.currentSubject)}${noIncide ? ' *' : ''}</strong>
-            ${incideTag}
-            ${conceptTag}
-          `;
-          this.subjectInfoBanner.style.display = 'flex';
-        } else {
-          this.subjectInfoBanner.style.display = 'none';
-        }
-      }
-
       if (!this.currentNivel || !this.currentSubject) {
+        if (this.subjectInfoBanner) this.subjectInfoBanner.style.display = 'none';
         this.tableBody.innerHTML = `
           <tr>
             <td colspan="16" style="text-align: center; padding: 2.5rem; color: #64748b;">
@@ -285,7 +261,31 @@
         return;
       }
 
-      const students = db.getStudents(this.currentNivel).slice(0, 40);
+      // Cargar TODOS los estudiantes del curso (sin límite arbitrario)
+      const students = db.getStudents(this.currentNivel);
+
+      // Actualizar banner informativo
+      if (this.subjectInfoBanner) {
+        const semTag = `<span class="header-badge-tag" style="background: ${this.currentSemestre === 1 ? '#dbeafe' : '#ffedd5'}; color: ${this.currentSemestre === 1 ? '#1e40af' : '#9a3412'}; font-weight: 700;">📅 ${this.currentSemestre}° Semestre Activo</span>`;
+        const codeTag = subConfig && subConfig.codigo ? `<span class="header-badge-tag" style="background: #e2e8f0; color: #1e293b; font-family: monospace; font-weight: 700;">Cód. ${escapeHtml(subConfig.codigo)}</span>` : '';
+        const countTag = `<span class="header-badge-tag" style="background: #eff6ff; color: #1d4ed8; font-weight: 700;">👨‍🎓 ${students.length} Estudiantes Matriculados</span>`;
+        const incideTag = noIncide 
+          ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">⚠️ No incide en promedio final (*)</span>` 
+          : `<span class="header-badge-tag" style="background: #ecfdf5; color: #065f46; font-weight: 600;">✓ Incide en promedio general</span>`;
+        const conceptTag = isConceptual
+          ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I: 1.0-3.9 | S: 4.0-4.9 | B: 5.0-5.9 | MB: 6.0-7.0)</span>`
+          : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 a 7.0)</span>`;
+
+        this.subjectInfoBanner.innerHTML = `
+          ${semTag}
+          ${codeTag}
+          <strong style="color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(this.currentSubject)}${noIncide ? ' *' : ''}</strong>
+          ${countTag}
+          ${incideTag}
+          ${conceptTag}
+        `;
+        this.subjectInfoBanner.style.display = 'flex';
+      }
 
       if (students.length === 0) {
         this.tableBody.innerHTML = `

@@ -554,10 +554,92 @@
     }
 
     getSubjectsForCourse(nivel) {
+      if (!nivel) return [];
       const map = this.getAllCourseSubjectsMap();
-      const list = map[nivel] || [];
-      // Ordenar por campo 'orden'
-      return list.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      let list = map[nivel];
+
+      // Si no hay con nombre exacto, buscar por coincidencia normalizada
+      if (!list || list.length === 0) {
+        const targetClean = normalizeCourseString(nivel);
+        for (const [k, v] of Object.entries(map)) {
+          const kClean = normalizeCourseString(k);
+          if ((kClean === targetClean || (kClean.length >= 4 && (kClean.startsWith(targetClean) || targetClean.startsWith(kClean)))) && v && v.length > 0) {
+            list = v;
+            break;
+          }
+        }
+      }
+
+      // Si aún no tiene asignaturas, generar plan de estudio estándar oficial según el nivel
+      if (!list || list.length === 0) {
+        list = this.generateDefaultSubjectsForLevel(nivel);
+        if (list.length > 0) {
+          map[nivel] = list;
+          localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(map));
+        }
+      }
+
+      return [...list].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    }
+
+    generateDefaultSubjectsForLevel(nivel) {
+      const clean = normalizeCourseString(nivel || '');
+      let baseList = [];
+
+      if (clean.includes('transicion') || clean.includes('prekinder') || clean.includes('kinder') || clean.includes('parvularia')) {
+        // Educación Parvularia (NT1 y NT2)
+        baseList = [
+          { codigo: '120', nombre: 'Lenguaje Verbal', incideEnPromedio: true, esConceptual: true },
+          { codigo: '130', nombre: 'Pensamiento Matemático', incideEnPromedio: true, esConceptual: true },
+          { codigo: '140', nombre: 'Exploración del Entorno Natural', incideEnPromedio: true, esConceptual: true },
+          { codigo: '150', nombre: 'Comprensión del Entorno Sociocultural', incideEnPromedio: true, esConceptual: true },
+          { codigo: '160', nombre: 'Lenguajes Artísticos', incideEnPromedio: true, esConceptual: true },
+          { codigo: '180', nombre: 'Corporalidad y Movimiento', incideEnPromedio: true, esConceptual: true },
+          { codigo: '200', nombre: 'Convivencia y Ciudadanía', incideEnPromedio: false, esConceptual: true }
+        ];
+      } else if (clean.includes('medio') || clean.includes('laboral')) {
+        // Enseñanza Media
+        baseList = [
+          { codigo: '120', nombre: 'Lengua y Literatura', incideEnPromedio: true, esConceptual: false },
+          { codigo: '130', nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+          { codigo: '141', nombre: 'Biología', incideEnPromedio: true, esConceptual: false },
+          { codigo: '142', nombre: 'Física', incideEnPromedio: true, esConceptual: false },
+          { codigo: '143', nombre: 'Química', incideEnPromedio: true, esConceptual: false },
+          { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+          { codigo: '110', nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
+          { codigo: '180', nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+          { codigo: '160', nombre: 'Artes Visuales / Música', incideEnPromedio: true, esConceptual: false },
+          { codigo: '220', nombre: 'Filosofía / Educación Ciudadana', incideEnPromedio: true, esConceptual: false },
+          { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
+          { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
+        ];
+      } else {
+        // Enseñanza Básica (1° a 8°)
+        baseList = [
+          { codigo: '120', nombre: 'Lenguaje y Comunicación', incideEnPromedio: true, esConceptual: false },
+          { codigo: '130', nombre: 'Matemática', incideEnPromedio: true, esConceptual: false },
+          { codigo: '140', nombre: 'Ciencias Naturales', incideEnPromedio: true, esConceptual: false },
+          { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', incideEnPromedio: true, esConceptual: false },
+          { codigo: '110', nombre: 'Idioma Extranjero: Inglés', incideEnPromedio: true, esConceptual: false },
+          { codigo: '160', nombre: 'Artes Visuales', incideEnPromedio: true, esConceptual: false },
+          { codigo: '170', nombre: 'Música', incideEnPromedio: true, esConceptual: false },
+          { codigo: '180', nombre: 'Educación Física y Salud', incideEnPromedio: true, esConceptual: false },
+          { codigo: '190', nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
+          { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
+          { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
+        ];
+      }
+
+      return baseList.map((s, idx) => ({
+        id: 'asg_def_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6) + '_' + idx,
+        codigo: s.codigo,
+        nombre: s.nombre,
+        incideEnPromedio: s.incideEnPromedio,
+        esConceptual: s.esConceptual,
+        esJec: false,
+        nombreFantasia: '',
+        orden: idx + 1
+      }));
     }
 
     saveSubjectForCourse(nivel, subjectData) {
@@ -675,7 +757,23 @@
     getStudents(filterNivel = null) {
       try {
         const data = JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS)) || [];
-        let students = filterNivel ? data.filter(s => s.nivel === filterNivel) : data;
+        if (!filterNivel) {
+          return data.sort((a, b) => {
+            const apA = `${a.apellidoPaterno || ''} ${a.apellidoMaterno || ''} ${a.nombres || ''}`.trim().toLowerCase();
+            const apB = `${b.apellidoPaterno || ''} ${b.apellidoMaterno || ''} ${b.nombres || ''}`.trim().toLowerCase();
+            return apA.localeCompare(apB, 'es', { sensitivity: 'base' });
+          });
+        }
+
+        const targetClean = normalizeCourseString(filterNivel);
+        let students = data.filter(s => {
+          if (!s || !s.nivel) return false;
+          if (s.nivel === filterNivel) return true;
+          const sClean = normalizeCourseString(s.nivel);
+          return sClean === targetClean ||
+            (sClean.length >= 4 && (sClean.startsWith(targetClean) || targetClean.startsWith(sClean)));
+        });
+
         return students.sort((a, b) => {
           const apA = `${a.apellidoPaterno || ''} ${a.apellidoMaterno || ''} ${a.nombres || ''}`.trim().toLowerCase();
           const apB = `${b.apellidoPaterno || ''} ${b.apellidoMaterno || ''} ${b.nombres || ''}`.trim().toLowerCase();
