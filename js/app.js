@@ -32,30 +32,7 @@
   };
 
   document.addEventListener('DOMContentLoaded', () => {
-    const db = window.db;
-    const NIVELES_DISPONIBLES = window.NIVELES_DISPONIBLES;
-    const initializeDemoData = window.initializeDemoData;
-
-    // 1. Inicializar datos de demostración si es la primera ejecución
-    if (typeof initializeDemoData === 'function') {
-      initializeDemoData();
-    }
-
-    // 2. Instanciar módulos de vista
-    window.configView = new window.ConfigView();
-    window.subjectsView = new window.SubjectsView();
-    window.studentsView = new window.StudentsView();
-    window.gradesView = new window.GradesView();
-    window.attendanceView = new window.AttendanceView();
-    window.reportGenerator = new window.ReportGenerator();
-    window.pdfExporter = new window.PdfExporter();
-
-    // 3. Inicializar selector de niveles en la vista de informes
-    if (window.reportGenerator) {
-      window.reportGenerator.populateNivelSelect();
-    }
-
-    // 4. Configurar Navegación por pestañas
+    // 1. Configurar Navegación por pestañas PRIMERO para que la interfaz SIEMPRE responda
     const navTabs = document.querySelectorAll('.nav-tab-btn');
     const viewContainers = document.querySelectorAll('.view-container');
 
@@ -72,28 +49,59 @@
           targetView.classList.add('active');
         }
 
-        // Refrescar datos según la pestaña
-        if (targetViewId === 'reports-view') {
-          window.reportGenerator.updateStudentDropdown();
-          window.reportGenerator.renderPreview();
-        } else if (targetViewId === 'grades-view') {
-          window.gradesView.updateSubjectDropdown();
-          window.gradesView.render();
-        } else if (targetViewId === 'subjects-view') {
-          window.subjectsView.populateNivelSelects();
-          window.subjectsView.updateCoursePjBadge();
-          window.subjectsView.renderCoursesTable();
-          window.subjectsView.renderSubjects();
-        } else if (targetViewId === 'attendance-view') {
-          window.attendanceView.render();
-        } else if (targetViewId === 'students-view') {
-          window.studentsView.render();
-        } else if (targetViewId === 'config-view') {
-          window.configView.loadData();
-          window.configView.renderProfesoresJefeTable();
+        // Refrescar datos según la pestaña con tolerancia a fallos
+        try {
+          if (targetViewId === 'reports-view' && window.reportGenerator) {
+            window.reportGenerator.updateStudentDropdown();
+            window.reportGenerator.renderPreview();
+          } else if (targetViewId === 'grades-view' && window.gradesView) {
+            window.gradesView.updateSubjectDropdown();
+            window.gradesView.render();
+          } else if (targetViewId === 'subjects-view' && window.subjectsView) {
+            window.subjectsView.populateNivelSelects();
+            window.subjectsView.updateCoursePjBadge();
+            window.subjectsView.renderCoursesTable();
+            window.subjectsView.renderSubjects();
+          } else if (targetViewId === 'attendance-view' && window.attendanceView) {
+            window.attendanceView.render();
+          } else if (targetViewId === 'students-view' && window.studentsView) {
+            window.studentsView.render();
+          } else if (targetViewId === 'config-view' && window.configView) {
+            window.configView.loadData();
+            window.configView.renderProfesoresJefeTable();
+          }
+        } catch (tabErr) {
+          console.error(`Error al actualizar vista ${targetViewId}:`, tabErr);
         }
       });
     });
+
+    // 2. Inicializar datos de demostración si es la primera ejecución
+    try {
+      if (typeof window.initializeDemoData === 'function') {
+        window.initializeDemoData();
+      }
+    } catch (demoErr) {
+      console.error('Error al inicializar datos demo:', demoErr);
+    }
+
+    // 3. Instanciar módulos de vista con protección individual contra excepciones
+    try { window.configView = new window.ConfigView(); } catch (e) { console.error('Error en ConfigView:', e); }
+    try { window.subjectsView = new window.SubjectsView(); } catch (e) { console.error('Error en SubjectsView:', e); }
+    try { window.studentsView = new window.StudentsView(); } catch (e) { console.error('Error en StudentsView:', e); }
+    try { window.gradesView = new window.GradesView(); } catch (e) { console.error('Error en GradesView:', e); }
+    try { window.attendanceView = new window.AttendanceView(); } catch (e) { console.error('Error en AttendanceView:', e); }
+    try { window.reportGenerator = new window.ReportGenerator(); } catch (e) { console.error('Error en ReportGenerator:', e); }
+    try { window.pdfExporter = new window.PdfExporter(); } catch (e) { console.error('Error en PdfExporter:', e); }
+
+    // 4. Inicializar selector de niveles en la vista de informes
+    if (window.reportGenerator && typeof window.reportGenerator.populateNivelSelect === 'function') {
+      try {
+        window.reportGenerator.populateNivelSelect();
+      } catch (repErr) {
+        console.error('Error al poblar selector de informes:', repErr);
+      }
+    }
 
     // 5. Botón de regenerar datos de demostración
     const resetDemoBtn = document.getElementById('btn-reset-demo');

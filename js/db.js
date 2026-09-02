@@ -253,7 +253,7 @@
     getCourses() {
       try {
         let courses = JSON.parse(localStorage.getItem(DB_KEYS.COURSES));
-        if (!courses || courses.length === 0) {
+        if (!courses || !Array.isArray(courses) || courses.length === 0) {
           courses = [
             { id: 'cur_p1a', nombre: 'Primero Básico A', profesorJefe: 'Prof. Carmen Gloria Muñoz', orden: 1 },
             { id: 'cur_m1a', nombre: 'Primero Medio A', profesorJefe: 'Prof. Alejandro Valenzuela', orden: 2 }
@@ -264,7 +264,7 @@
         // Sincronizar automáticamente con profesores jefe asignados previamente
         let updated = false;
         courses.forEach(c => {
-          if (!c.profesorJefe || !c.profesorJefe.trim()) {
+          if (c && c.nombre && (!c.profesorJefe || !c.profesorJefe.trim())) {
             const known = this.findKnownProfesorJefe(c.nombre);
             if (known) {
               c.profesorJefe = known;
@@ -277,8 +277,9 @@
           localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
         }
 
-        return courses.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        return courses.filter(c => c && c.nombre).sort((a, b) => (a.orden || 0) - (b.orden || 0));
       } catch (e) {
+        console.error('Error al obtener cursos:', e);
         return [];
       }
     }
@@ -294,7 +295,7 @@
     getCourseByName(nombre) {
       if (!nombre) return null;
       const clean = normalizeCourseString(nombre);
-      return this.getCourses().find(c => normalizeCourseString(c.nombre) === clean) || null;
+      return this.getCourses().find(c => c && normalizeCourseString(c.nombre) === clean) || null;
     }
 
     /**
@@ -306,6 +307,7 @@
     findKnownProfesorJefe(nombreCurso) {
       if (!nombreCurso || !nombreCurso.trim()) return '';
       const targetClean = normalizeCourseString(nombreCurso);
+      if (!targetClean || targetClean.length < 3) return '';
 
       const config = this.getConfig();
       const map = config.profesoresJefe || {};
@@ -328,7 +330,7 @@
       for (const key of Object.keys(map)) {
         if (map[key] && map[key].trim()) {
           const keyClean = normalizeCourseString(key);
-          if (keyClean.startsWith(targetClean) || targetClean.startsWith(keyClean)) {
+          if (keyClean.length >= 4 && (keyClean.startsWith(targetClean) || targetClean.startsWith(keyClean))) {
             return map[key].trim();
           }
         }
@@ -338,9 +340,9 @@
       try {
         const rawCourses = JSON.parse(localStorage.getItem(DB_KEYS.COURSES)) || [];
         for (const c of rawCourses) {
-          if (c.profesorJefe && c.profesorJefe.trim()) {
+          if (c && c.nombre && c.profesorJefe && c.profesorJefe.trim()) {
             const cClean = normalizeCourseString(c.nombre);
-            if (cClean === targetClean || cClean.startsWith(targetClean) || targetClean.startsWith(cClean)) {
+            if (cClean === targetClean || (cClean.length >= 4 && (cClean.startsWith(targetClean) || targetClean.startsWith(cClean)))) {
               return c.profesorJefe.trim();
             }
           }
