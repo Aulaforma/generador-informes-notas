@@ -44,6 +44,9 @@
       this.subjectForm = document.getElementById('subject-add-form');
       this.subjectCodeInput = document.getElementById('subject-input-code');
       this.subjectNameInput = document.getElementById('subject-input-name');
+      this.subjectCheckJec = document.getElementById('subject-check-jec');
+      this.subjectInputFantasia = document.getElementById('subject-input-fantasia');
+      this.groupSubjectFantasia = document.getElementById('group-subject-fantasia');
       this.incideCheckbox = document.getElementById('subject-check-incide');
       this.conceptualCheckbox = document.getElementById('subject-check-conceptual');
       this.listContainer = document.getElementById('subjects-list-container');
@@ -225,7 +228,7 @@
         });
       }
 
-      // 3. Selección desde el Catálogo Oficial SIGE
+      // 3. Selección desde el Catálogo Oficial SIGE (Alineación Directa)
       if (this.catalogSelect) {
         this.catalogSelect.addEventListener('change', (e) => {
           const idxVal = e.target.value;
@@ -236,7 +239,89 @@
             if (this.subjectNameInput) this.subjectNameInput.value = item.nombre;
             if (this.incideCheckbox) this.incideCheckbox.checked = item.incide;
             if (this.conceptualCheckbox) this.conceptualCheckbox.checked = item.conceptual;
-            window.showToast(`Cargada asignatura oficial: [${item.codigo}] ${item.nombre}`, 'info');
+
+            // Detección de asignaturas / talleres JEC
+            const isJec = Boolean(item.esJec || item.codigo.startsWith('90') || (item.categoria && item.categoria.includes('JEC')));
+            if (this.subjectCheckJec) {
+              this.subjectCheckJec.checked = isJec;
+            }
+            if (this.groupSubjectFantasia) {
+              this.groupSubjectFantasia.style.display = isJec ? 'block' : 'none';
+            }
+            if (isJec && this.subjectInputFantasia) {
+              this.subjectInputFantasia.focus();
+              window.showToast(`Taller JEC oficial cargado [Cód. ${item.codigo}]: defina su Nombre de Fantasía`, 'info');
+            } else {
+              window.showToast(`Cargada asignatura oficial SIGE: [${item.codigo}] ${item.nombre}`, 'info');
+            }
+          }
+        });
+      }
+
+      // 3.1. Alternar casilla de Asignatura / Taller JEC
+      if (this.subjectCheckJec) {
+        this.subjectCheckJec.addEventListener('change', (e) => {
+          const isChecked = e.target.checked;
+          if (this.groupSubjectFantasia) {
+            this.groupSubjectFantasia.style.display = isChecked ? 'block' : 'none';
+          }
+          if (isChecked) {
+            if (this.subjectCodeInput && (!this.subjectCodeInput.value || !this.subjectCodeInput.value.startsWith('90'))) {
+              this.subjectCodeInput.value = '900';
+              if (this.subjectNameInput && !this.subjectNameInput.value) {
+                this.subjectNameInput.value = 'Taller de Libre Disposición';
+              }
+            }
+            if (this.incideCheckbox) this.incideCheckbox.checked = false; // Talleres JEC normalmente no inciden
+            if (this.subjectInputFantasia) this.subjectInputFantasia.focus();
+          }
+        });
+      }
+
+      // 3.2. Alineación inteligente al ingresar Código SIGE
+      if (this.subjectCodeInput) {
+        const autoAlignByCode = () => {
+          const codeVal = this.subjectCodeInput.value.trim();
+          if (codeVal.length >= 3) {
+            const match = db.findSigeByCode ? db.findSigeByCode(codeVal) : null;
+            if (match) {
+              if (this.subjectNameInput && !this.subjectNameInput.value.trim()) {
+                this.subjectNameInput.value = match.nombre;
+              }
+              const isJec = Boolean(match.esJec || codeVal.startsWith('90'));
+              if (this.subjectCheckJec) this.subjectCheckJec.checked = isJec;
+              if (this.groupSubjectFantasia) this.groupSubjectFantasia.style.display = isJec ? 'block' : 'none';
+              if (this.incideCheckbox) this.incideCheckbox.checked = match.incide;
+              if (this.conceptualCheckbox) this.conceptualCheckbox.checked = match.conceptual;
+            }
+          }
+        };
+        this.subjectCodeInput.addEventListener('input', autoAlignByCode);
+        this.subjectCodeInput.addEventListener('change', autoAlignByCode);
+      }
+
+      // 3.3. Detección inteligente al tipear el nombre de la asignatura (ej: Inglés, Matemática, Orientación, Religión)
+      if (this.subjectNameInput) {
+        this.subjectNameInput.addEventListener('input', (e) => {
+          const val = e.target.value.trim();
+          if (!val) return;
+
+          // Auto-asignar código SIGE si el campo de código está vacío
+          if (db.findSigeByName && (!this.subjectCodeInput.value || this.subjectCodeInput.value.trim() === '')) {
+            const sigeMatch = db.findSigeByName(val);
+            if (sigeMatch) {
+              this.subjectCodeInput.value = sigeMatch.codigo;
+              const isJec = Boolean(sigeMatch.esJec || sigeMatch.codigo.startsWith('90'));
+              if (this.subjectCheckJec) this.subjectCheckJec.checked = isJec;
+              if (this.groupSubjectFantasia) this.groupSubjectFantasia.style.display = isJec ? 'block' : 'none';
+              if (this.incideCheckbox) this.incideCheckbox.checked = sigeMatch.incide;
+              if (this.conceptualCheckbox) this.conceptualCheckbox.checked = sigeMatch.conceptual;
+            }
+          }
+
+          if (isTypicallyConceptual(val)) {
+            if (this.conceptualCheckbox) this.conceptualCheckbox.checked = true;
+            if (this.incideCheckbox) this.incideCheckbox.checked = false; // Religión y Orientación usualmente no inciden
           }
         });
       }
@@ -246,17 +331,6 @@
         this.subjectForm.addEventListener('submit', (e) => {
           e.preventDefault();
           this.handleAddSubject();
-        });
-      }
-
-      // Detección inteligente al tipear el nombre de la asignatura (ej: Orientación, Religión)
-      if (this.subjectNameInput) {
-        this.subjectNameInput.addEventListener('input', (e) => {
-          const val = e.target.value.trim();
-          if (isTypicallyConceptual(val)) {
-            if (this.conceptualCheckbox) this.conceptualCheckbox.checked = true;
-            if (this.incideCheckbox) this.incideCheckbox.checked = false; // Religión y Orientación usualmente no inciden
-          }
         });
       }
 
@@ -476,6 +550,8 @@
       const itemsHtml = subjects.map((sub, idx) => {
         const noIncide = sub.incideEnPromedio === false;
         const conceptual = sub.esConceptual;
+        const isJec = Boolean(sub.esJec || (sub.codigo && String(sub.codigo).startsWith('90')));
+        const hasFantasia = Boolean(sub.nombreFantasia && sub.nombreFantasia.trim() !== '');
 
         const incideBadge = noIncide
           ? `<span class="header-badge-tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">⚠️ * No Incide en Promedio</span>`
@@ -485,22 +561,45 @@
           ? `<span class="header-badge-tag" style="background: #f3e8ff; color: #6b21a8; font-weight: 700;">✨ Escala Conceptual (I, S, B, MB)</span>`
           : `<span class="header-badge-tag" style="background: #eff6ff; color: #1e40af; font-weight: 600;">🔢 Escala Numérica (1.0 - 7.0)</span>`;
 
-        const codeBadge = sub.codigo
-          ? `<span class="header-badge-tag" style="background: #e2e8f0; color: #1e293b; font-family: monospace; font-weight: 700; font-size: 0.8rem; border: 1px solid #cbd5e1;">Cód. ${escapeHtml(sub.codigo)}</span>`
+        const jecBadge = isJec
+          ? `<span class="header-badge-tag" style="background: #fffbeb; color: #92400e; font-weight: 700; border: 1px solid #fde68a;">⏱️ Asignatura / Taller JEC</span>`
           : '';
+
+        const codeBadge = sub.codigo
+          ? `<span class="header-badge-tag" style="background: #e0e7ff; color: #1e3a8a; font-family: monospace; font-weight: 700; font-size: 0.8rem; border: 1px solid #bfdbfe;" title="Código Oficial SIGE - MINEDUC">Cód. SIGE ${escapeHtml(sub.codigo)}</span>`
+          : '<span class="header-badge-tag" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem;">Sin código</span>';
 
         const displayName = noIncide ? `${sub.nombre} *` : sub.nombre;
 
+        let titleContentHtml = '';
+        if (hasFantasia) {
+          titleContentHtml = `
+            <div style="font-size: 1.05rem; font-weight: 800; color: #1e3a8a; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span>🏷️ ${escapeHtml(sub.nombreFantasia)}${noIncide ? ' *' : ''}</span>
+            </div>
+            <div style="font-size: 0.82rem; color: #475569; margin-top: 3px;">
+              Subsector Oficial SIGE: <strong>[${escapeHtml(sub.codigo || '900')}] ${escapeHtml(sub.nombre)}</strong>
+            </div>
+          `;
+        } else {
+          titleContentHtml = `
+            <div style="font-size: 1.02rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+              <span>${escapeHtml(displayName)}</span>
+            </div>
+          `;
+        }
+
         return `
-          <div class="card" style="margin-bottom: 0.6rem; padding: 0.8rem 1.1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-left: 4px solid ${noIncide ? '#f59e0b' : '#3b82f6'};">
+          <div class="card" style="margin-bottom: 0.6rem; padding: 0.85rem 1.15rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-left: 4px solid ${isJec ? '#f59e0b' : (noIncide ? '#f59e0b' : '#3b82f6')};">
             <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1;">
               <div style="font-weight: 700; color: #64748b; width: 28px; text-align: center;">${idx + 1}</div>
-              <div>
-                <div style="font-size: 1.02rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
                   ${codeBadge}
-                  <span>${escapeHtml(displayName)}</span>
+                  ${jecBadge}
                 </div>
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap;">
+                ${titleContentHtml}
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap;">
                   ${incideBadge}
                   ${conceptBadge}
                 </div>
@@ -513,6 +612,14 @@
               </button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.moveSubject('${sub.id}', 1)" ${idx === subjects.length - 1 ? 'disabled' : ''} title="Bajar posición">
                 ⬇️
+              </button>
+              ${isJec || (sub.codigo && String(sub.codigo).startsWith('90')) ? `
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.editFantasia('${sub.id}')" title="Asignar o modificar Nombre de Fantasía (Taller JEC)" style="background: #fef3c7; border-color: #fde68a; color: #92400e; font-weight: 700;">
+                  🏷️ ${hasFantasia ? 'Editar Fantasía' : '+ Nombre Fantasía'}
+                </button>
+              ` : ''}
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.editSubjectCode('${sub.id}')" title="Modificar Código SIGE de esta asignatura">
+                ✏️ Cód. SIGE
               </button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="window.subjectsView.toggleIncide('${sub.id}')" title="Alternar si incide o no en el promedio (*)">
                 ${noIncide ? '✅ Hacer Incidir' : '⚠️ No Incidir (*)'}
@@ -539,6 +646,8 @@
 
       const codigo = this.subjectCodeInput ? this.subjectCodeInput.value.trim() : '';
       const name = this.subjectNameInput ? this.subjectNameInput.value.trim() : '';
+      const esJec = this.subjectCheckJec ? this.subjectCheckJec.checked : false;
+      const nombreFantasia = this.subjectInputFantasia ? this.subjectInputFantasia.value.trim() : '';
 
       if (!name) {
         window.showToast('Escriba o seleccione el nombre de la asignatura', 'warning');
@@ -551,17 +660,55 @@
       db.saveSubjectForCourse(this.currentNivel, {
         codigo,
         nombre: name,
+        esJec,
+        nombreFantasia,
         incideEnPromedio: incide,
         esConceptual: conceptual
       });
 
       if (this.subjectCodeInput) this.subjectCodeInput.value = '';
       if (this.subjectNameInput) this.subjectNameInput.value = '';
+      if (this.subjectInputFantasia) this.subjectInputFantasia.value = '';
+      if (this.subjectCheckJec) this.subjectCheckJec.checked = false;
+      if (this.groupSubjectFantasia) this.groupSubjectFantasia.style.display = 'none';
       if (this.catalogSelect) this.catalogSelect.value = '';
       if (this.incideCheckbox) this.incideCheckbox.checked = true;
       if (this.conceptualCheckbox) this.conceptualCheckbox.checked = false;
 
-      window.showToast(`Asignatura "${name}" ${codigo ? `(Cód. ${codigo}) ` : ''}agregada a ${this.currentNivel}`, 'success');
+      const displayLabel = nombreFantasia ? `"${nombreFantasia}" (JEC ${codigo ? `Cód. ${codigo} - ` : ''}${name})` : `"${name}" ${codigo ? `(Cód. ${codigo}) ` : ''}`;
+      window.showToast(`Asignatura ${displayLabel} agregada a ${this.currentNivel}`, 'success');
+      this.renderSubjects();
+    }
+
+    editFantasia(subjectId) {
+      const subjects = db.getSubjectsForCourse(this.currentNivel);
+      const sub = subjects.find(s => s.id === subjectId);
+      if (!sub) return;
+
+      const current = sub.nombreFantasia || '';
+      const nuevo = prompt(`Ingrese o modifique el Nombre de Fantasía (Taller JEC) para "${sub.nombre}":`, current);
+      if (nuevo === null) return;
+
+      sub.nombreFantasia = nuevo.trim();
+      sub.esJec = true;
+      db.saveSubjectForCourse(this.currentNivel, sub);
+      window.showToast(`Nombre de fantasía actualizado a "${nuevo.trim() || 'Sin fantasía'}"`, 'success');
+      this.renderSubjects();
+    }
+
+    editSubjectCode(subjectId) {
+      const subjects = db.getSubjectsForCourse(this.currentNivel);
+      const sub = subjects.find(s => s.id === subjectId);
+      if (!sub) return;
+
+      const current = sub.codigo || '';
+      const nuevo = prompt(`Asignar o corregir Código SIGE para "${sub.nombre}":`, current);
+      if (nuevo === null) return;
+
+      sub.codigo = nuevo.trim();
+      if (sub.codigo.startsWith('90')) sub.esJec = true;
+      db.saveSubjectForCourse(this.currentNivel, sub);
+      window.showToast(`Código SIGE de "${sub.nombre}" actualizado a [${nuevo.trim() || 'Sin código'}]`, 'success');
       this.renderSubjects();
     }
 

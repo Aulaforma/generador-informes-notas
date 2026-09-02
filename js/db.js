@@ -57,57 +57,79 @@
   // Catálogo Oficial de Asignaturas y Códigos SIGE - MINEDUC
   const CATALOGO_SIGE = [
     // 1. Plan Común
-    { codigo: '110', nombre: 'Idioma Extranjero: Inglés', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '120', nombre: 'Lengua Castellana y Comunicación / Lengua y Literatura', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '130', nombre: 'Educación Matemática / Matemática', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '140', nombre: 'Ciencias Naturales (Educación Básica)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '141', nombre: 'Biología', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '142', nombre: 'Física', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '143', nombre: 'Química', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '152', nombre: 'Educación Ciudadana (Plan común 3° y 4° Medio)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '160', nombre: 'Artes Visuales', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '170', nombre: 'Artes Musicales / Música', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '180', nombre: 'Educación Física y Salud', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '190', nombre: 'Tecnología / Educación Tecnológica', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
-    { codigo: '200', nombre: 'Orientación', categoria: 'Plan Común (SIGE)', incide: false, conceptual: true },
-    { codigo: '210', nombre: 'Religión (Católica, Evangélica, etc.)', categoria: 'Plan Común (SIGE)', incide: false, conceptual: true },
-    { codigo: '220', nombre: 'Filosofía (Plan común 3° y 4° Medio)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false },
+    { codigo: '110', nombre: 'Idioma Extranjero: Inglés', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '120', nombre: 'Lengua Castellana y Comunicación / Lengua y Literatura', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '130', nombre: 'Educación Matemática / Matemática', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '140', nombre: 'Ciencias Naturales (Educación Básica)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '141', nombre: 'Biología', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '142', nombre: 'Física', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '143', nombre: 'Química', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '150', nombre: 'Historia, Geografía y Ciencias Sociales', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '152', nombre: 'Educación Ciudadana (Plan común 3° y 4° Medio)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '160', nombre: 'Artes Visuales', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '170', nombre: 'Artes Musicales / Música', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '180', nombre: 'Educación Física y Salud', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '190', nombre: 'Tecnología / Educación Tecnológica', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
+    { codigo: '200', nombre: 'Orientación', categoria: 'Plan Común (SIGE)', incide: false, conceptual: true, esJec: false },
+    { codigo: '210', nombre: 'Religión (Católica, Evangélica, etc.)', categoria: 'Plan Común (SIGE)', incide: false, conceptual: true, esJec: false },
+    { codigo: '220', nombre: 'Filosofía (Plan común 3° y 4° Medio)', categoria: 'Plan Común (SIGE)', incide: true, conceptual: false, esJec: false },
 
     // 2. Modalidad Humanista-Científica (HC) - Área A (Letras / Historia / Filosofía)
-    { codigo: '315', nombre: 'Taller de Literatura', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
-    { codigo: '315', nombre: 'Lectura y Escritura Especializadas', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
-    { codigo: '315', nombre: 'Argumentación y Participación en Democracia', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
-    { codigo: '316', nombre: 'Comprensión Histórica del Presente', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
-    { codigo: '316', nombre: 'Geografía, Territorio y Desafíos Socioambientales', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
-    { codigo: '317', nombre: 'Estética', categoria: 'Electivos HC - Área A', incide: true, conceptual: false },
+    { codigo: '315', nombre: 'Taller de Literatura', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
+    { codigo: '315', nombre: 'Lectura y Escritura Especializadas', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
+    { codigo: '315', nombre: 'Argumentación y Participación en Democracia', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
+    { codigo: '316', nombre: 'Comprensión Histórica del Presente', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
+    { codigo: '316', nombre: 'Geografía, Territorio y Desafíos Socioambientales', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
+    { codigo: '317', nombre: 'Estética', categoria: 'Electivos HC - Área A', incide: true, conceptual: false, esJec: false },
 
     // 3. Modalidad Humanista-Científica (HC) - Área B (Matemática / Ciencias)
-    { codigo: '325', nombre: 'Límites, Derivadas e Integrales', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '325', nombre: 'Estocástica', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '325', nombre: 'Pensamiento Computacional y Programación', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '325', nombre: 'Geometría 3D', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '326', nombre: 'Biología de los Ecosistemas', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '326', nombre: 'Célula, Genoma y Organismo', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '327', nombre: 'Física de Partículas / Mecánica', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
-    { codigo: '328', nombre: 'Química del Entorno', categoria: 'Electivos HC - Área B', incide: true, conceptual: false },
+    { codigo: '325', nombre: 'Límites, Derivadas e Integrales', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '325', nombre: 'Estocástica', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '325', nombre: 'Pensamiento Computacional y Programación', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '325', nombre: 'Geometría 3D', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '326', nombre: 'Biología de los Ecosistemas', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '326', nombre: 'Célula, Genoma y Organismo', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '327', nombre: 'Física de Partículas / Mecánica', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
+    { codigo: '328', nombre: 'Química del Entorno', categoria: 'Electivos HC - Área B', incide: true, conceptual: false, esJec: false },
 
     // 4. Modalidad Humanista-Científica (HC) - Área C (Artes / Ed. Física)
-    { codigo: '335', nombre: 'Artes Visuales, Audiovisuales y Mediales', categoria: 'Electivos HC - Área C', incide: true, conceptual: false },
-    { codigo: '335', nombre: 'Interpretación y Creación en Música', categoria: 'Electivos HC - Área C', incide: true, conceptual: false },
-    { codigo: '335', nombre: 'Diseño y Arquitectura', categoria: 'Electivos HC - Área C', incide: true, conceptual: false },
-    { codigo: '336', nombre: 'Promoción de Estilos de Vida Activos y Saludables', categoria: 'Electivos HC - Área C', incide: true, conceptual: false },
-    { codigo: '336', nombre: 'Ciencias del Ejercicio Físico y Deportivo', categoria: 'Electivos HC - Área C', incide: true, conceptual: false },
+    { codigo: '335', nombre: 'Artes Visuales, Audiovisuales y Mediales', categoria: 'Electivos HC - Área C', incide: true, conceptual: false, esJec: false },
+    { codigo: '335', nombre: 'Interpretación y Creación en Música', categoria: 'Electivos HC - Área C', incide: true, conceptual: false, esJec: false },
+    { codigo: '335', nombre: 'Diseño y Arquitectura', categoria: 'Electivos HC - Área C', incide: true, conceptual: false, esJec: false },
+    { codigo: '336', nombre: 'Promoción de Estilos de Vida Activos y Saludables', categoria: 'Electivos HC - Área C', incide: true, conceptual: false, esJec: false },
+    { codigo: '336', nombre: 'Ciencias del Ejercicio Físico y Deportivo', categoria: 'Electivos HC - Área C', incide: true, conceptual: false, esJec: false },
 
     // 5. Códigos de Libre Disposición JEC
-    { codigo: '900', nombre: 'Taller de Libre Disposición', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '901', nombre: 'Taller de Literatura / Lenguaje', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '902', nombre: 'Taller de Matemática', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '903', nombre: 'Taller de Ciencias', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '904', nombre: 'Taller de Computación / Tecnología', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '905', nombre: 'Taller de Deportes / Recreación', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false },
-    { codigo: '906', nombre: 'Taller de Artes / Música', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false }
+    { codigo: '900', nombre: 'Taller de Libre Disposición', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '901', nombre: 'Taller de Literatura / Lenguaje', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '902', nombre: 'Taller de Matemática', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '903', nombre: 'Taller de Ciencias', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '904', nombre: 'Taller de Computación / Tecnología', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '905', nombre: 'Taller de Deportes / Recreación', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true },
+    { codigo: '906', nombre: 'Taller de Artes / Música', categoria: 'Talleres Libre Disposición JEC', incide: false, conceptual: false, esJec: true }
   ];
+
+  /**
+   * Busca un subsector en CATALOGO_SIGE por su código oficial.
+   */
+  function findSigeByCode(codigo) {
+    if (!codigo) return null;
+    const clean = String(codigo).trim();
+    return CATALOGO_SIGE.find(item => item.codigo === clean) || null;
+  }
+
+  /**
+   * Busca un subsector en CATALOGO_SIGE de manera inteligente y normalizada por nombre.
+   */
+  function findSigeByName(nombre) {
+    if (!nombre) return null;
+    const clean = String(nombre).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!clean || clean.length < 3) return null;
+    return CATALOGO_SIGE.find(item => {
+      const itemClean = item.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      return itemClean === clean || itemClean.startsWith(clean) || clean.startsWith(itemClean) || itemClean.includes(clean);
+    }) || null;
+  }
 
   /**
    * Regla de redondeo de notas:
@@ -546,6 +568,8 @@
       let saved;
 
       const codigo = (subjectData.codigo || '').trim();
+      const isJec = Boolean(subjectData.esJec || (codigo && String(codigo).startsWith('90')));
+      const nombreFantasia = (subjectData.nombreFantasia || '').trim();
       const incide = subjectData.incideEnPromedio !== undefined ? Boolean(subjectData.incideEnPromedio) : true;
       const conceptual = subjectData.esConceptual !== undefined 
         ? Boolean(subjectData.esConceptual) 
@@ -558,6 +582,8 @@
             ...list[idx],
             codigo,
             nombre: subjectData.nombre.trim(),
+            esJec: isJec,
+            nombreFantasia,
             incideEnPromedio: incide,
             esConceptual: conceptual
           };
@@ -567,6 +593,8 @@
             id: subjectData.id,
             codigo,
             nombre: subjectData.nombre.trim(),
+            esJec: isJec,
+            nombreFantasia,
             incideEnPromedio: incide,
             esConceptual: conceptual,
             orden: list.length + 1
@@ -578,6 +606,8 @@
           id: 'asg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
           codigo,
           nombre: subjectData.nombre.trim(),
+          esJec: isJec,
+          nombreFantasia,
           incideEnPromedio: incide,
           esConceptual: conceptual,
           orden: list.length + 1
@@ -949,6 +979,8 @@
   return {
     NIVELES_DISPONIBLES,
     CATALOGO_SIGE,
+    findSigeByCode,
+    findSigeByName,
     roundToChileanGrade,
     formatGrade,
     convertToConcept,

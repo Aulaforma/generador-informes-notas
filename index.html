@@ -318,53 +318,74 @@
         <!-- FORMULARIO PARA AGREGAR NUEVA ASIGNATURA AL CURSO SELECCIONADO -->
         <div class="card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; margin-bottom: 1.5rem; padding: 1.25rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin: 0;">
-              ➕ Agregar Nueva Asignatura a este Curso
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
+              <span>➕ Agregar Nueva Asignatura / Taller JEC</span>
             </h3>
             <!-- DESPLEGABLE DE CÓDIGOS OFICIALES SIGE - MINEDUC -->
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <label for="subject-catalog-select" style="font-size: 0.82rem; font-weight: 700; color: #0369a1; margin: 0;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <label for="subject-catalog-select" style="font-size: 0.84rem; font-weight: 700; color: #0369a1; margin: 0;">
                 🇨🇱 Catálogo Oficial SIGE:
               </label>
-              <select id="subject-catalog-select" class="form-control" style="width: 320px; font-size: 0.85rem; border-color: #0284c7; background: #f0f9ff; font-weight: 600;">
-                <option value="">⚡ Seleccionar desde Catálogo Oficial...</option>
+              <select id="subject-catalog-select" class="form-control" style="width: 380px; max-width: 100%; font-size: 0.85rem; border-color: #0284c7; background: #f0f9ff; font-weight: 600; color: #0c4a6e;">
+                <option value="">⚡ Seleccionar desde Catálogo Oficial SIGE (Alineación Directa)...</option>
                 <!-- Opciones agrupadas pobladas dinámicamente desde subjectsView.js -->
               </select>
             </div>
           </div>
 
           <form id="subject-add-form">
-            <div style="display: grid; grid-template-columns: 110px 2fr 1.2fr 1.2fr auto; gap: 1rem; align-items: flex-end;">
+            <div style="display: grid; grid-template-columns: 110px 2.2fr 1.1fr 1.1fr 1.1fr auto; gap: 0.85rem; align-items: flex-end;">
               <div class="form-group">
-                <label for="subject-input-code">Cód. SIGE:</label>
-                <input type="text" id="subject-input-code" class="form-control" placeholder="110, 120..." maxlength="6" style="text-align: center; font-family: monospace; font-weight: 700;" />
+                <label for="subject-input-code" style="font-weight: 700;">Cód. SIGE:</label>
+                <input type="text" id="subject-input-code" class="form-control" placeholder="110, 900..." maxlength="6" style="text-align: center; font-family: monospace; font-weight: 700; background: #ffffff;" title="Código SIGE Oficial" />
               </div>
 
               <div class="form-group">
-                <label for="subject-input-name">Nombre de la Asignatura: <span class="required-star">*</span></label>
-                <input type="text" id="subject-input-name" class="form-control" required placeholder="Ej: Lengua y Literatura, Matemática, Orientación..." />
+                <label for="subject-input-name" style="font-weight: 700;">Nombre Oficial / Subsector: <span class="required-star">*</span></label>
+                <input type="text" id="subject-input-name" class="form-control" required placeholder="Ej: Idioma Extranjero: Inglés, Taller de Libre Disposición..." />
               </div>
 
               <div class="form-group" style="padding-bottom: 0.5rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.82rem; font-weight: 700; color: #b45309;">
+                  <input type="checkbox" id="subject-check-jec" style="width: 17px; height: 17px; accent-color: #d97706;" />
+                  <span>⏱️ ¿Taller JEC?</span>
+                </label>
+                <span style="font-size: 0.7rem; color: #78350f;">(Habilita nombre fantasía)</span>
+              </div>
+
+              <div class="form-group" style="padding-bottom: 0.5rem;">
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
                   <input type="checkbox" id="subject-check-incide" checked style="width: 17px; height: 17px;" />
-                  <span>¿Incide en promedio?</span>
+                  <span>¿Incide promedio?</span>
                 </label>
-                <span style="font-size: 0.72rem; color: #64748b;">(Si desmarca, se agrega asterisco *)</span>
+                <span style="font-size: 0.7rem; color: #64748b;">(Si desmarca: asterisco *)</span>
               </div>
 
               <div class="form-group" style="padding-bottom: 0.5rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.82rem; font-weight: 600;">
                   <input type="checkbox" id="subject-check-conceptual" style="width: 17px; height: 17px;" />
-                  <span>¿Evalúa con Conceptos?</span>
+                  <span>¿Conceptos?</span>
                 </label>
-                <span style="font-size: 0.72rem; color: #64748b;">(I, S, B, MB para Orientación/Religión)</span>
+                <span style="font-size: 0.7rem; color: #64748b;">(I, S, B, MB)</span>
               </div>
 
               <div>
-                <button type="submit" class="btn btn-primary" style="height: 38px;">
-                  ➕ Agregar Asignatura
+                <button type="submit" class="btn btn-primary" style="height: 38px; white-space: nowrap;">
+                  ➕ Agregar
                 </button>
+              </div>
+            </div>
+
+            <!-- CONTENEDOR EXPANDIBLE DE NOMBRE DE FANTASÍA PARA TALLERES JEC -->
+            <div id="group-subject-fantasia" style="display: none; margin-top: 0.85rem; padding: 0.75rem 1rem; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 6px; animation: fadeIn 0.2s ease;">
+              <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <label for="subject-input-fantasia" style="font-weight: 700; color: #92400e; margin: 0; min-width: 220px; font-size: 0.88rem;">
+                  🏷️ Nombre de Fantasía (Taller JEC):
+                </label>
+                <input type="text" id="subject-input-fantasia" class="form-control" placeholder="Ej: Robótica y Programación, Academia de Ajedrez, Taller de Teatro Musical..." style="flex: 1; min-width: 280px; border-color: #f59e0b; background: #ffffff; font-weight: 600;" />
+                <span style="font-size: 0.76rem; color: #b45309; line-height: 1.3;">
+                  💡 Este nombre de fantasía se mostrará en las planillas e informes de notas respaldado por su código SIGE.
+                </span>
               </div>
             </div>
           </form>
@@ -839,15 +860,15 @@
   <div class="toast-container no-print"></div>
 
   <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
-  <script src="./js/db.js?v=1.3.2"></script>
-  <script src="./js/seedData.js?v=1.3.2"></script>
-  <script src="./js/configView.js?v=1.3.2"></script>
-  <script src="./js/subjectsView.js?v=1.3.2"></script>
-  <script src="./js/studentsView.js?v=1.3.2"></script>
-  <script src="./js/gradesView.js?v=1.3.2"></script>
-  <script src="./js/attendanceView.js?v=1.3.2"></script>
-  <script src="./js/reportGenerator.js?v=1.3.2"></script>
-  <script src="./js/pdfExport.js?v=1.3.2"></script>
-  <script src="./js/app.js?v=1.3.2"></script>
+  <script src="./js/db.js?v=1.4.0"></script>
+  <script src="./js/seedData.js?v=1.4.0"></script>
+  <script src="./js/configView.js?v=1.4.0"></script>
+  <script src="./js/subjectsView.js?v=1.4.0"></script>
+  <script src="./js/studentsView.js?v=1.4.0"></script>
+  <script src="./js/gradesView.js?v=1.4.0"></script>
+  <script src="./js/attendanceView.js?v=1.4.0"></script>
+  <script src="./js/reportGenerator.js?v=1.4.0"></script>
+  <script src="./js/pdfExport.js?v=1.4.0"></script>
+  <script src="./js/app.js?v=1.4.0"></script>
 </body>
 </html>

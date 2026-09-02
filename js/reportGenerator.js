@@ -182,7 +182,17 @@
           evaluatedIncidentCount++;
         }
 
-        const subjectDisplayName = noIncide ? `${sub.nombre} *` : sub.nombre;
+        const isJec = Boolean(sub.esJec || (sub.codigo && String(sub.codigo).startsWith('90')));
+        const hasFantasia = Boolean(sub.nombreFantasia && sub.nombreFantasia.trim() !== '');
+
+        let mainTitle = '';
+        let subTitle = '';
+        if (hasFantasia) {
+          mainTitle = `${sub.nombreFantasia.trim()}${noIncide ? ' *' : ''}`;
+          subTitle = `(JEC: ${sub.nombre})`;
+        } else {
+          mainTitle = noIncide ? `${sub.nombre} *` : sub.nombre;
+        }
 
         // Notas parciales 1° Semestre (hasta 6 evaluaciones visibles)
         const n1Cells = Array.from({ length: 6 }).map((_, i) => {
@@ -265,8 +275,9 @@
             <td class="center" style="width: 38px; font-family: monospace; font-size: 7.2pt; font-weight: 700; color: #475569;">
               ${sub.codigo ? escapeHtml(sub.codigo) : '-'}
             </td>
-            <td style="font-weight: 600; font-size: 8pt; padding-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px;">
-              ${escapeHtml(subjectDisplayName)}
+            <td style="font-weight: 600; font-size: 8pt; padding-left: 6px; line-height: 1.25; max-width: 210px;">
+              <span style="font-weight: 700; color: #0f172a;">${escapeHtml(mainTitle)}</span>
+              ${subTitle ? `<span style="font-size: 6.8pt; color: #64748b; display: block;">${escapeHtml(subTitle)}</span>` : ''}
             </td>
             ${n1Cells}
             <td class="center grade-val ${p1Class}" style="width: 38px; font-weight: 800; background: #eff6ff; font-size: 8.5pt;">${p1Display}</td>

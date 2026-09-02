@@ -125,7 +125,8 @@
       { codigo: '170', nombre: 'Música', incideEnPromedio: true, esConceptual: false },
       { codigo: '190', nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
       { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true }, // No incide (*), conceptual (I, S, B, MB)
-      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }      // No incide (*), conceptual (I, S, B, MB)
+      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true },      // No incide (*), conceptual (I, S, B, MB)
+      { codigo: '900', nombre: 'Taller de Libre Disposición', esJec: true, nombreFantasia: 'Taller de Psicomotricidad y Juegos', incideEnPromedio: false, esConceptual: false }
     ];
 
     p1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Básico A', s));
@@ -147,7 +148,8 @@
       { codigo: '170', nombre: 'Música', incideEnPromedio: true, esConceptual: false },
       { codigo: '190', nombre: 'Tecnología', incideEnPromedio: true, esConceptual: false },
       { codigo: '200', nombre: 'Orientación', incideEnPromedio: false, esConceptual: true },
-      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true }
+      { codigo: '210', nombre: 'Religión', incideEnPromedio: false, esConceptual: true },
+      { codigo: '900', nombre: 'Taller de Libre Disposición', esJec: true, nombreFantasia: 'Taller de Robótica y Ciencias', incideEnPromedio: false, esConceptual: false }
     ];
 
     m1CourseSubjects.forEach(s => db.saveSubjectForCourse('Primero Medio A', s));
