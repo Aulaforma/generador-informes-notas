@@ -884,9 +884,24 @@
         <button type="button" class="modal-close-btn" id="share-modal-close-btn">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem; line-height: 1.45;">
-          Genera enlaces directos y cortos para compartir por WhatsApp o correo. El sistema sincroniza los datos en la nube y protege la administración:
+        <p style="font-size: 0.88rem; color: #475569; margin-bottom: 0.75rem; line-height: 1.45;">
+          Para que tus profesores vean los datos que ya tienes ingresados (estudiantes y notas), puedes enviárselos por WhatsApp o subirlos a la sala en la nube:
         </p>
+
+        <!-- BANNER DE DATOS ACTUALES A COMPARTIR -->
+        <div style="background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <strong style="color: #1e3a8a; font-size: 0.92rem; display: block;">
+              📊 Tus Datos Actuales Listos para Compartir:
+            </strong>
+            <span id="share-modal-data-count" style="font-size: 0.8rem; color: #1e40af; font-weight: 600;">
+              Calculando estudiantes y notas...
+            </span>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-share-modal-push-cloud" style="font-weight: 700; white-space: nowrap; background: #1e40af;">
+            ☁️ Subir mis datos a la Sala ahora
+          </button>
+        </div>
 
         <!-- ENLACE PARA DOCENTES -->
         <div style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 8px; padding: 0.9rem 1rem; margin-bottom: 1rem;">
@@ -1044,16 +1059,16 @@
   <div class="toast-container no-print"></div>
 
   <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
-  <script src="./js/cloudSync.js?v=1.4.9"></script>
-  <script src="./js/db.js?v=1.4.9"></script>
-  <script src="./js/seedData.js?v=1.4.9"></script>
-  <script src="./js/configView.js?v=1.4.9"></script>
-  <script src="./js/subjectsView.js?v=1.4.9"></script>
-  <script src="./js/studentsView.js?v=1.4.9"></script>
-  <script src="./js/gradesView.js?v=1.4.9"></script>
-  <script src="./js/attendanceView.js?v=1.4.9"></script>
-  <script src="./js/reportGenerator.js?v=1.4.9"></script>
-  <script src="./js/pdfExport.js?v=1.4.9"></script>
-  <script src="./js/app.js?v=1.4.9"></script>
+  <script src="./js/cloudSync.js?v=1.5.0"></script>
+  <script src="./js/db.js?v=1.5.0"></script>
+  <script src="./js/seedData.js?v=1.5.0"></script>
+  <script src="./js/configView.js?v=1.5.0"></script>
+  <script src="./js/subjectsView.js?v=1.5.0"></script>
+  <script src="./js/studentsView.js?v=1.5.0"></script>
+  <script src="./js/gradesView.js?v=1.5.0"></script>
+  <script src="./js/attendanceView.js?v=1.5.0"></script>
+  <script src="./js/reportGenerator.js?v=1.5.0"></script>
+  <script src="./js/pdfExport.js?v=1.5.0"></script>
+  <script src="./js/app.js?v=1.5.0"></script>
 </body>
 </html>

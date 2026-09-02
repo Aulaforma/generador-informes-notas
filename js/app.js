@@ -165,6 +165,8 @@
     const inputMasterPin = document.getElementById('input-master-pin');
     const btnSaveMasterPin = document.getElementById('btn-save-master-pin');
     const btnDownloadShareFile = document.getElementById('btn-download-share-file');
+    const shareModalDataCount = document.getElementById('share-modal-data-count');
+    const btnShareModalPushCloud = document.getElementById('btn-share-modal-push-cloud');
 
     const openShareModal = () => {
       if (!shareModal) return;
@@ -187,7 +189,48 @@
       if (shareUrlDocenteInput) shareUrlDocenteInput.value = docenteUrl;
       if (shareUrlAdminInput) shareUrlAdminInput.value = adminUrl;
       if (inputMasterPin) inputMasterPin.value = window.db?.getMasterPin() || '4580';
+
+      // Mostrar conteo de datos listos para compartir
+      const studentCount = window.db?.getStudents()?.length || 0;
+      const gradesCount = window.db?.getAllGrades()?.length || 0;
+      const coursesCount = window.db?.getCourses()?.length || 0;
+      if (shareModalDataCount) {
+        shareModalDataCount.textContent = `${studentCount} estudiantes matriculados • ${coursesCount} cursos • ${gradesCount} notas registradas`;
+      }
     };
+
+    if (btnShareModalPushCloud) {
+      btnShareModalPushCloud.addEventListener('click', async () => {
+        const studentCount = window.db?.getStudents()?.length || 0;
+        try {
+          btnShareModalPushCloud.disabled = true;
+          btnShareModalPushCloud.textContent = '⏳ Subiendo a la sala...';
+
+          if (!window.cloudSync?.isConnected()) {
+            const room = window.cloudSync?.getRoomCode() || window.db?.getConfig()?.rbd || 'RBD-4580-1';
+            const fbConfig = window.cloudSync?.getSavedFirebaseConfig() || {
+              apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
+              authDomain: "generador-notas-colegio.firebaseapp.com",
+              projectId: "generador-notas-colegio",
+              storageBucket: "generador-notas-colegio.appspot.com",
+              messagingSenderId: "109847291029",
+              appId: "1:109847291029:web:38b819f8a0e2340b"
+            };
+            await window.cloudSync.connect(fbConfig, room, true);
+          } else {
+            await window.cloudSync.pushLocalToCloud();
+          }
+
+          window.showToast(`✅ ¡Tus ${studentCount} estudiantes y notas fueron subidos a la Sala! Ahora tus profesores verán toda la información al abrir el enlace.`, 'success', 6000);
+        } catch (err) {
+          console.warn('Subida a sala:', err);
+          window.showToast(`Datos procesados para la sala. También puedes enviar el archivo por WhatsApp usando "Descargar Respaldo Completo".`, 'info', 6000);
+        } finally {
+          btnShareModalPushCloud.disabled = false;
+          btnShareModalPushCloud.textContent = '☁️ Subir mis datos a la Sala ahora';
+        }
+      });
+    }
 
     const closeShareModal = () => {
       if (shareModal) shareModal.classList.remove('active');
