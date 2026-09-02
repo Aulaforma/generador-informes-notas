@@ -75,6 +75,11 @@
         debouncedRender();
       });
 
+      window.addEventListener('cloud-data-updated', () => {
+        this.populateNivelesDropdowns();
+        debouncedRender();
+      });
+
       window.addEventListener('courses_updated', () => {
         this.populateNivelesDropdowns();
         debouncedRender();

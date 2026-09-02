@@ -66,6 +66,12 @@
         this.updateStudentDropdown();
         debouncedRenderPreview();
       });
+
+      window.addEventListener('cloud-data-updated', () => {
+        this.populateNivelSelect();
+        this.updateStudentDropdown();
+        debouncedRenderPreview();
+      });
     }
 
     populateNivelSelect() {

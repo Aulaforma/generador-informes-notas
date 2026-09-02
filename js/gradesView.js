@@ -88,6 +88,12 @@
         this.updateSubjectDropdown();
         debouncedRenderGrades();
       });
+
+      window.addEventListener('cloud-data-updated', () => {
+        this.populateNivelSelect();
+        this.updateSubjectDropdown();
+        debouncedRenderGrades();
+      });
     }
 
     populateNivelSelect() {

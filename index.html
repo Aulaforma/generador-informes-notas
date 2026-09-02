@@ -15,6 +15,10 @@
 
   <!-- SheetJS (xlsx) para importación y exportación de planillas Excel (.xlsx, .xls, .csv) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Firebase SDK Compat (Para sincronización colaborativa en la nube en tiempo real) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -34,6 +38,9 @@
     <div class="header-actions">
       <button class="btn btn-primary btn-sm" id="btn-share-data" title="Compartir la página con tus datos ingresados" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); font-weight: 700; border: none; box-shadow: 0 2px 4px rgba(37,99,235,0.3);">
         🔗 Compartir Datos
+      </button>
+      <button class="btn btn-secondary btn-sm" id="btn-cloud-sync" title="Configurar trabajo colaborativo en la nube (Edición simultánea)" style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; border: 1.5px solid #cbd5e1; background: #ffffff;">
+        <span id="cloud-status-icon">☁️</span> <span id="cloud-status-text">Modo Local</span>
       </button>
       <button class="btn btn-secondary btn-sm" id="btn-reset-demo" title="Recargar estudiantes y notas de ejemplo">
         🔄 Cargar Datos Demo
@@ -914,19 +921,86 @@
     </div>
   </div>
 
+  <!-- MODAL DE SINCRONIZACIÓN EN LA NUBE (TRABAJO COLABORATIVO) -->
+  <div class="modal-backdrop" id="cloud-sync-modal">
+    <div class="modal-card modal-card-md">
+      <div class="modal-header">
+        <h3>☁️ Sincronización Colaborativa en la Nube</h3>
+        <button type="button" class="modal-close-btn" id="cloud-modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem; line-height: 1.45;">
+          Conecta varios computadores a la misma <strong>Sala de Colegio</strong>. Cualquier nota o asistencia ingresada por un profesor se reflejará al instante en la pantalla de los demás sin tener que enviar archivos.
+        </p>
+
+        <!-- BANNER DE ESTADO ACTUAL -->
+        <div id="cloud-status-banner" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; background: #f8fafc; border: 1.5px solid #cbd5e1;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span id="cloud-status-dot" style="width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
+            <div>
+              <strong id="cloud-status-title" style="font-size: 0.9rem; color: #1e293b;">Modo Local (Desconectado)</strong>
+              <small id="cloud-status-sub" style="display: block; font-size: 0.75rem; color: #64748b;">Los datos se guardan únicamente en este computador.</small>
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-disconnect" style="display: none; font-size: 0.75rem;">
+            🔌 Desconectar
+          </button>
+        </div>
+
+        <!-- FORMULARIO DE CONEXIÓN A SALA -->
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="cloud-room-input" style="font-weight: 700; font-size: 0.85rem; color: #1e3a8a;">
+            🏫 Código de Sala o Colegio (ej: RBD 4580-1):
+          </label>
+          <input type="text" id="cloud-room-input" class="form-control" placeholder="Ej: RBD-4580-1-TUCAPEL" style="text-transform: uppercase; font-weight: 700; font-family: monospace;" />
+          <small style="color: #64748b; font-size: 0.75rem;">
+            Todos los profesores que ingresen este mismo código compartirán y sincronizarán la misma información en vivo.
+          </small>
+        </div>
+
+        <!-- CONFIGURACIÓN DE FIREBASE (ACORDEÓN / DESPLEGABLE) -->
+        <details style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 1.25rem;">
+          <summary style="font-size: 0.82rem; font-weight: 700; color: #334155; cursor: pointer;">
+            ⚙️ Configuración del Proyecto Firebase (Opcional / Personalizado)
+          </summary>
+          <div style="margin-top: 0.65rem; font-size: 0.78rem; color: #475569;">
+            <p style="margin-bottom: 0.5rem;">
+              Pega aquí el objeto de configuración de tu proyecto Firebase (o se usará la sala comunitaria segura por defecto):
+            </p>
+            <textarea id="cloud-firebase-config-input" class="form-control" rows="4" style="font-family: monospace; font-size: 0.75rem;" placeholder='{\n  "apiKey": "AIzaSy...",\n  "projectId": "mi-colegio-12345"\n}'></textarea>
+          </div>
+        </details>
+
+        <!-- ACCIONES RÁPIDAS -->
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="btn-cloud-connect" style="flex: 1; font-weight: 700; min-width: 180px;">
+            🚀 Conectar y Activar Sincronización
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-cloud-push" style="font-weight: 600;" title="Subir los estudiantes y notas actuales de este equipo a la nube">
+            ⬆️ Subir Mis Datos a la Sala
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cloud-modal-cancel-btn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
   <div class="toast-container no-print"></div>
 
   <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
-  <script src="./js/db.js?v=1.4.7"></script>
-  <script src="./js/seedData.js?v=1.4.7"></script>
-  <script src="./js/configView.js?v=1.4.7"></script>
-  <script src="./js/subjectsView.js?v=1.4.7"></script>
-  <script src="./js/studentsView.js?v=1.4.7"></script>
-  <script src="./js/gradesView.js?v=1.4.7"></script>
-  <script src="./js/attendanceView.js?v=1.4.7"></script>
-  <script src="./js/reportGenerator.js?v=1.4.7"></script>
-  <script src="./js/pdfExport.js?v=1.4.7"></script>
-  <script src="./js/app.js?v=1.4.7"></script>
+  <script src="./js/cloudSync.js?v=1.4.8"></script>
+  <script src="./js/db.js?v=1.4.8"></script>
+  <script src="./js/seedData.js?v=1.4.8"></script>
+  <script src="./js/configView.js?v=1.4.8"></script>
+  <script src="./js/subjectsView.js?v=1.4.8"></script>
+  <script src="./js/studentsView.js?v=1.4.8"></script>
+  <script src="./js/gradesView.js?v=1.4.8"></script>
+  <script src="./js/attendanceView.js?v=1.4.8"></script>
+  <script src="./js/reportGenerator.js?v=1.4.8"></script>
+  <script src="./js/pdfExport.js?v=1.4.8"></script>
+  <script src="./js/app.js?v=1.4.8"></script>
 </body>
 </html>

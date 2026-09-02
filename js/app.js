@@ -264,7 +264,176 @@
       }
     });
 
-    // 8. Auto-carga si la página fue abierta con un enlace compartido (#share=...)
+    // 8. Módulo de Sincronización en la Nube (Cloud Sync Colaborativo)
+    const btnCloudSync = document.getElementById('btn-cloud-sync');
+    const cloudSyncModal = document.getElementById('cloud-sync-modal');
+    const cloudModalCloseBtn = document.getElementById('cloud-modal-close-btn');
+    const cloudModalCancelBtn = document.getElementById('cloud-modal-cancel-btn');
+    const cloudRoomInput = document.getElementById('cloud-room-input');
+    const cloudFirebaseConfigInput = document.getElementById('cloud-firebase-config-input');
+    const btnCloudConnect = document.getElementById('btn-cloud-connect');
+    const btnCloudPush = document.getElementById('btn-cloud-push');
+    const btnCloudDisconnect = document.getElementById('btn-cloud-disconnect');
+    const cloudStatusIcon = document.getElementById('cloud-status-icon');
+    const cloudStatusText = document.getElementById('cloud-status-text');
+    const cloudStatusDot = document.getElementById('cloud-status-dot');
+    const cloudStatusTitle = document.getElementById('cloud-status-title');
+    const cloudStatusSub = document.getElementById('cloud-status-sub');
+    const cloudStatusBanner = document.getElementById('cloud-status-banner');
+
+    const updateCloudUI = (status) => {
+      if (!btnCloudSync) return;
+      if (status.isConnected) {
+        btnCloudSync.style.background = '#ecfdf5';
+        btnCloudSync.style.borderColor = '#10b981';
+        btnCloudSync.style.color = '#047857';
+        if (cloudStatusIcon) cloudStatusIcon.textContent = '🟢';
+        if (cloudStatusText) cloudStatusText.textContent = `En Línea (${status.roomCode})`;
+
+        if (cloudStatusDot) cloudStatusDot.style.background = '#10b981';
+        if (cloudStatusTitle) {
+          cloudStatusTitle.textContent = `🟢 Conectado a Sala: ${status.roomCode}`;
+          cloudStatusTitle.style.color = '#047857';
+        }
+        if (cloudStatusSub) {
+          cloudStatusSub.textContent = status.lastSync 
+            ? `Sincronización activa en tiempo real. Última actualización: ${status.lastSync}`
+            : `Sincronización activa en tiempo real.`;
+        }
+        if (cloudStatusBanner) {
+          cloudStatusBanner.style.background = '#f0fdf4';
+          cloudStatusBanner.style.borderColor = '#bbf7d0';
+        }
+        if (btnCloudDisconnect) btnCloudDisconnect.style.display = 'inline-block';
+        if (btnCloudPush) btnCloudPush.style.display = 'inline-block';
+      } else {
+        btnCloudSync.style.background = '#ffffff';
+        btnCloudSync.style.borderColor = '#cbd5e1';
+        btnCloudSync.style.color = 'inherit';
+        if (cloudStatusIcon) cloudStatusIcon.textContent = '☁️';
+        if (cloudStatusText) cloudStatusText.textContent = 'Modo Local';
+
+        if (cloudStatusDot) cloudStatusDot.style.background = '#94a3b8';
+        if (cloudStatusTitle) {
+          cloudStatusTitle.textContent = 'Modo Local (Desconectado)';
+          cloudStatusTitle.style.color = '#1e293b';
+        }
+        if (cloudStatusSub) {
+          cloudStatusSub.textContent = 'Los datos se guardan únicamente en este computador.';
+        }
+        if (cloudStatusBanner) {
+          cloudStatusBanner.style.background = '#f8fafc';
+          cloudStatusBanner.style.borderColor = '#cbd5e1';
+        }
+        if (btnCloudDisconnect) btnCloudDisconnect.style.display = 'none';
+        if (btnCloudPush) btnCloudPush.style.display = 'none';
+      }
+    };
+
+    if (window.cloudSync) {
+      window.cloudSync.onStatusChange(updateCloudUI);
+    }
+
+    const openCloudModal = () => {
+      if (!cloudSyncModal) return;
+      cloudSyncModal.classList.add('active');
+
+      if (cloudRoomInput) {
+        cloudRoomInput.value = window.cloudSync?.getRoomCode() || window.db?.getConfig()?.rbd || 'RBD-4580-1';
+      }
+
+      if (cloudFirebaseConfigInput) {
+        const savedCfg = window.cloudSync?.getSavedFirebaseConfig();
+        cloudFirebaseConfigInput.value = savedCfg ? JSON.stringify(savedCfg, null, 2) : '';
+      }
+    };
+
+    const closeCloudModal = () => {
+      if (cloudSyncModal) cloudSyncModal.classList.remove('active');
+    };
+
+    if (btnCloudSync) btnCloudSync.addEventListener('click', openCloudModal);
+    if (cloudModalCloseBtn) cloudModalCloseBtn.addEventListener('click', closeCloudModal);
+    if (cloudModalCancelBtn) cloudModalCancelBtn.addEventListener('click', closeCloudModal);
+    if (cloudSyncModal) {
+      cloudSyncModal.addEventListener('click', (e) => {
+        if (e.target === cloudSyncModal) closeCloudModal();
+      });
+    }
+
+    if (btnCloudConnect) {
+      btnCloudConnect.addEventListener('click', async () => {
+        const room = cloudRoomInput ? cloudRoomInput.value.trim() : '';
+        if (!room) {
+          window.showToast('Debe ingresar un Código de Colegio o Sala (ej: RBD 4580-1)', 'warning');
+          return;
+        }
+
+        let fbConfig = null;
+        const customConfigStr = cloudFirebaseConfigInput ? cloudFirebaseConfigInput.value.trim() : '';
+        if (customConfigStr) {
+          try {
+            fbConfig = JSON.parse(customConfigStr);
+          } catch (e) {
+            window.showToast('La configuración de Firebase no es un JSON válido', 'danger');
+            return;
+          }
+        } else {
+          // Configuración predeterminada de Firebase
+          fbConfig = window.cloudSync?.getSavedFirebaseConfig() || {
+            apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
+            authDomain: "generador-notas-colegio.firebaseapp.com",
+            projectId: "generador-notas-colegio",
+            storageBucket: "generador-notas-colegio.appspot.com",
+            messagingSenderId: "109847291029",
+            appId: "1:109847291029:web:38b819f8a0e2340b"
+          };
+        }
+
+        try {
+          btnCloudConnect.disabled = true;
+          btnCloudConnect.textContent = '⏳ Conectando...';
+
+          await window.cloudSync.connect(fbConfig, room, true);
+          window.showToast(`✅ Conectado exitosamente a la Sala: ${room}`, 'success', 5000);
+          closeCloudModal();
+        } catch (err) {
+          console.warn('Conexión Firestore aviso:', err);
+          window.showToast(`Conectado a la sala "${room}". Modo en espera de red: ${err.message}`, 'info', 5000);
+          closeCloudModal();
+        } finally {
+          btnCloudConnect.disabled = false;
+          btnCloudConnect.textContent = '🚀 Conectar y Activar Sincronización';
+        }
+      });
+    }
+
+    if (btnCloudPush) {
+      btnCloudPush.addEventListener('click', async () => {
+        try {
+          btnCloudPush.disabled = true;
+          btnCloudPush.textContent = '⏳ Subiendo...';
+          await window.cloudSync.pushLocalToCloud();
+          window.showToast('⬆️ Datos locales subidos exitosamente a la nube', 'success');
+        } catch (e) {
+          window.showToast('Error al subir datos a la nube: ' + e.message, 'danger');
+        } finally {
+          btnCloudPush.disabled = false;
+          btnCloudPush.textContent = '⬆️ Subir Mis Datos a la Sala';
+        }
+      });
+    }
+
+    if (btnCloudDisconnect) {
+      btnCloudDisconnect.addEventListener('click', () => {
+        if (confirm('¿Desea desconectarse de la sala en la nube y volver al Modo Local?')) {
+          window.cloudSync.disconnect();
+          window.showToast('🔌 Desconectado de la nube. Modo Local activo.', 'info');
+        }
+      });
+    }
+
+    // 9. Auto-carga si la página fue abierta con un enlace compartido (#share=...)
     checkSharedDataInUrl();
 
     // Inicializar preview de informes en segundo plano

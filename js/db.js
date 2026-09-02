@@ -879,6 +879,10 @@
       localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
       localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify(attendance));
 
+      if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+        window.cloudSync.notifyLocalChange();
+      }
+
       // Disparar UN SOLO evento al finalizar todo el lote
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { bulk: true, count: studentsList.length } }));
 
@@ -902,6 +906,9 @@
       });
       if (added) {
         localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+        if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+          window.cloudSync.notifyLocalChange();
+        }
         window.dispatchEvent(new CustomEvent('courses_updated'));
       }
     }
@@ -911,6 +918,9 @@
       localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
       this.deleteGradesByStudent(id);
       this.deleteAttendanceByStudent(id);
+      if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+        window.cloudSync.notifyLocalChange();
+      }
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { deletedId: id } }));
     }
 
@@ -918,6 +928,9 @@
       localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify([]));
       localStorage.setItem(DB_KEYS.GRADES, JSON.stringify([]));
       localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify([]));
+      if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+        window.cloudSync.notifyLocalChange();
+      }
       window.dispatchEvent(new CustomEvent('students_updated', { detail: { cleared: true } }));
       return true;
     }
@@ -977,6 +990,9 @@
       }
 
       localStorage.setItem(DB_KEYS.GRADES, JSON.stringify(allGrades));
+      if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+        window.cloudSync.notifyLocalChange();
+      }
       return record;
     }
 
@@ -1131,6 +1147,9 @@
       }
 
       localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify(all));
+      if (window.cloudSync && typeof window.cloudSync.notifyLocalChange === 'function') {
+        window.cloudSync.notifyLocalChange();
+      }
       return record;
     }
 
