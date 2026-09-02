@@ -792,11 +792,14 @@
       <div class="modal-body">
         <!-- ZONA DE CARGA DE ARCHIVO (DRAG AND DROP) -->
         <div class="dropzone" id="excel-dropzone">
-          <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display: none;" />
+          <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv, .htm, .html" style="display: none;" />
           <div class="dropzone-icon">📊</div>
-          <p><strong>Haga clic aquí</strong> o arrastre su archivo <strong>Excel (.xlsx, .xls)</strong> o <strong>CSV</strong></p>
+          <p><strong>Haga clic aquí</strong> o arrastre su archivo <strong>Excel (.xlsx, .xls)</strong>, <strong>CSV</strong> o <strong>Nómina SIGE (.htm)</strong></p>
           <p style="font-size: 0.78rem; color: #64748b; margin-top: 0.35rem;">
-            Formatos soportados: Columnas <em>RUT, DV, Nombres, Apellido Paterno, Apellido Materno, Nivel</em> (o RUT completo con guión).
+            Formatos soportados: Nóminas oficiales MINEDUC/SIGE (ej. <em>sheet001.htm</em>, <em>nomina_excel.xls</em>) o planillas con columnas <em>RUT, DV, Nombres, Apellido Paterno, Apellido Materno, Nivel</em>.
+          </p>
+          <p style="font-size: 0.76rem; color: #0284c7; margin-top: 0.4rem; background: #f0f9ff; padding: 4px 8px; border-radius: 4px; display: inline-block;">
+            💡 <strong>Tip SIGE:</strong> Si tu nómina descargada del SIGE viene en una carpeta con <code>sheet001.htm</code>, puedes seleccionar directamente ese archivo.
           </p>
         </div>
 
@@ -860,15 +863,15 @@
   <div class="toast-container no-print"></div>
 
   <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
-  <script src="./js/db.js?v=1.4.0"></script>
-  <script src="./js/seedData.js?v=1.4.0"></script>
-  <script src="./js/configView.js?v=1.4.0"></script>
-  <script src="./js/subjectsView.js?v=1.4.0"></script>
-  <script src="./js/studentsView.js?v=1.4.0"></script>
-  <script src="./js/gradesView.js?v=1.4.0"></script>
-  <script src="./js/attendanceView.js?v=1.4.0"></script>
-  <script src="./js/reportGenerator.js?v=1.4.0"></script>
-  <script src="./js/pdfExport.js?v=1.4.0"></script>
-  <script src="./js/app.js?v=1.4.0"></script>
+  <script src="./js/db.js?v=1.4.1"></script>
+  <script src="./js/seedData.js?v=1.4.1"></script>
+  <script src="./js/configView.js?v=1.4.1"></script>
+  <script src="./js/subjectsView.js?v=1.4.1"></script>
+  <script src="./js/studentsView.js?v=1.4.1"></script>
+  <script src="./js/gradesView.js?v=1.4.1"></script>
+  <script src="./js/attendanceView.js?v=1.4.1"></script>
+  <script src="./js/reportGenerator.js?v=1.4.1"></script>
+  <script src="./js/pdfExport.js?v=1.4.1"></script>
+  <script src="./js/app.js?v=1.4.1"></script>
 </body>
 </html>

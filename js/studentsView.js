@@ -446,20 +446,78 @@
 
       reader.onload = (e) => {
         try {
-          const data = new Uint8Array(e.target.result);
-          
-          if (!window.XLSX) {
-            window.showToast('La biblioteca de procesamiento Excel no está disponible', 'danger');
+          const rawBuffer = e.target.result;
+          const bytes = new Uint8Array(rawBuffer);
+
+          let textPreview = '';
+          try {
+            textPreview = new TextDecoder('iso-8859-1').decode(bytes.slice(0, 4096));
+          } catch (ex) {
+            textPreview = '';
+          }
+
+          // 1. Detección de archivos de "Marco Web" (Frameset) de Excel / SIGE (como nomina_excel (2).xls)
+          if (
+            textPreview.includes('<frameset') || 
+            textPreview.includes('Excel Workbook Frameset') || 
+            (textPreview.includes('<frame ') && textPreview.includes('sheet001'))
+          ) {
+            const companionMatch = textPreview.match(/src=["']([^"']*sheet001[^"']*)["']/i);
+            const sheetPath = companionMatch ? companionMatch[1] : 'sheet001.htm';
+
+            alert(
+              `⚠️ AVISO SOBRE EL ARCHIVO "${file.name}":\n\n` +
+              `Este archivo fue exportado por el SIGE como un "Marco Web" (pesa apenas ~10 KB) y no contiene la tabla de estudiantes dentro de sí mismo.\n\n` +
+              `La nómina real con todos los alumnos está en el archivo:\n` +
+              `📁 "${sheetPath}" (que se descargó junto con él en su carpeta de Descargas).\n\n` +
+              `👉 CÓMO CARGARLO FÁCILMENTE:\n` +
+              `1. Haga clic de nuevo en el botón de carga y seleccione directamente "${sheetPath}". ¡El sistema lo leerá de inmediato!\n\n` +
+              `2. O abra "${file.name}" en Excel y elija "Guardar como -> Tipo: Libro de Excel (*.xlsx)", y luego suba ese archivo .xlsx.`
+            );
             return;
           }
 
-          // Soporta tanto archivos clásicos .xls (BIFF8) como .xlsx y .csv
-          const workbook = window.XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          
-          // Leer hoja como matriz de filas (header: 1) para detectar dinámicamente la fila de encabezados
-          const sheetMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+          let sheetMatrix = [];
+
+          // 2. Detección y parseo directo de HTML (.htm, .html o archivos .xls que son HTML de SIGE)
+          const isHtml = file.name.endsWith('.htm') || file.name.endsWith('.html') || textPreview.includes('<table') || textPreview.includes('<html');
+
+          if (isHtml) {
+            try {
+              // Decodificar con ISO-8859-1 para caracteres chilenos (tildes, eñes)
+              const fullHtml = new TextDecoder('iso-8859-1').decode(bytes);
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(fullHtml, 'text/html');
+              const table = doc.querySelector('table');
+
+              if (table) {
+                const trElements = Array.from(table.querySelectorAll('tr'));
+                sheetMatrix = trElements.map(tr => {
+                  return Array.from(tr.querySelectorAll('th, td')).map(cell => cell.textContent.replace(/\s+/g, ' ').trim());
+                });
+              }
+            } catch (htmlErr) {
+              console.warn('Fallo parseo HTML DOM, intentando con SheetJS:', htmlErr);
+            }
+          }
+
+          // 3. Si no fue procesado como tabla HTML, usar SheetJS (XLSX, XLS binario BIFF8, CSV)
+          if (!sheetMatrix || sheetMatrix.length === 0) {
+            if (!window.XLSX) {
+              window.showToast('La biblioteca de procesamiento Excel no está disponible', 'danger');
+              return;
+            }
+
+            const workbook = window.XLSX.read(bytes, { type: 'array' });
+            if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
+              window.showToast('El archivo no contiene hojas de cálculo legibles', 'warning');
+              return;
+            }
+
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            sheetMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+          }
 
           if (!sheetMatrix || sheetMatrix.length === 0) {
             window.showToast('La planilla está vacía o no contiene filas con datos', 'warning');
