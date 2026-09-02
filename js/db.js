@@ -716,6 +716,98 @@
       return saved;
     }
 
+    saveStudentsBulk(studentsList, mode = 'merge', cursosAfectados = []) {
+      let students = this.getStudents();
+      let attendance = this.getAllAttendance();
+
+      if (mode === 'replace_course' && cursosAfectados.length > 0) {
+        const cursosSet = new Set(cursosAfectados);
+        const toDeleteIds = new Set(students.filter(s => cursosSet.has(s.nivel)).map(s => s.id));
+        students = students.filter(s => !cursosSet.has(s.nivel));
+        attendance = attendance.filter(a => !toDeleteIds.has(a.studentId));
+        // Borrar notas de los alumnos reemplazados
+        const allGrades = this.getAllGrades().filter(g => !toDeleteIds.has(g.studentId));
+        localStorage.setItem(DB_KEYS.GRADES, JSON.stringify(allGrades));
+      }
+
+      let importedCount = 0;
+      let updatedCount = 0;
+
+      studentsList.forEach(st => {
+        const idx = students.findIndex(s => Number(s.rut) === Number(st.rut));
+        let studentId;
+
+        if (idx !== -1) {
+          studentId = students[idx].id;
+          students[idx] = {
+            ...students[idx],
+            rut: st.rut,
+            dv: st.dv,
+            nombres: st.nombres,
+            apellidoPaterno: st.apellidoPaterno,
+            apellidoMaterno: st.apellidoMaterno,
+            nivel: st.nivel
+          };
+          updatedCount++;
+        } else {
+          studentId = 'std_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+          students.push({
+            id: studentId,
+            rut: st.rut,
+            dv: st.dv,
+            nombres: st.nombres,
+            apellidoPaterno: st.apellidoPaterno,
+            apellidoMaterno: st.apellidoMaterno,
+            nivel: st.nivel
+          });
+          importedCount++;
+        }
+
+        // Asistencia base
+        const attIdx = attendance.findIndex(a => a.studentId === studentId);
+        if (attIdx === -1) {
+          attendance.push({
+            id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            studentId,
+            nivel: st.nivel,
+            diasTrabajados: 90,
+            diasAsistidos: 90,
+            porcentaje: 100
+          });
+        }
+      });
+
+      // Guardar en disco UNA SOLA VEZ para todo el lote
+      localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
+      localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify(attendance));
+
+      // Disparar UN SOLO evento al finalizar todo el lote
+      window.dispatchEvent(new CustomEvent('students_updated', { detail: { bulk: true, count: studentsList.length } }));
+
+      return { importedCount, updatedCount };
+    }
+
+    saveCoursesBulk(coursesList) {
+      const courses = this.getCourses();
+      let added = false;
+      coursesList.forEach(cName => {
+        if (!cName) return;
+        const exists = courses.some(c => c.nombre.trim().toLowerCase() === cName.trim().toLowerCase());
+        if (!exists) {
+          courses.push({
+            id: 'crs_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            nombre: cName.trim(),
+            profesorJefe: ''
+          });
+          added = true;
+        }
+      });
+      if (added) {
+        localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(courses));
+        window.dispatchEvent(new CustomEvent('courses_updated'));
+      }
+    }
+
     deleteStudent(id) {
       const students = this.getStudents().filter(s => s.id !== id);
       localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));

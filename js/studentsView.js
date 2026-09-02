@@ -840,61 +840,36 @@
         return;
       }
 
-      const mode = this.importModeSelect ? this.importModeSelect.value : 'merge';
-      const cursosAfectados = new Set(validStudents.map(s => s.nivel));
-
-      // Asegurar que todos los cursos presentes en el archivo existan en la base de datos
-      cursosAfectados.forEach(nivel => {
-        if (!db.getCourseByName(nivel)) {
-          db.saveCourse({ nombre: nivel });
-        }
-      });
-
-      // Si la modalidad es "replace_course", eliminamos primero los alumnos de los cursos presentes
-      if (mode === 'replace_course') {
-        cursosAfectados.forEach(nivel => {
-          const currentInCourse = db.getStudents(nivel);
-          currentInCourse.forEach(std => db.deleteStudent(std.id));
-        });
+      if (this.btnExecuteImport) {
+        this.btnExecuteImport.disabled = true;
+        this.btnExecuteImport.textContent = '⏳ Guardando nómina... Por favor espere';
       }
 
-      let importedCount = 0;
-      let updatedCount = 0;
+      // Ejecutar en el siguiente ciclo de eventos para permitir que el botón se actualice visualmente y no congele la UI
+      setTimeout(() => {
+        try {
+          const mode = this.importModeSelect ? this.importModeSelect.value : 'merge';
+          const cursosAfectados = Array.from(new Set(validStudents.map(s => s.nivel)));
 
-      validStudents.forEach(st => {
-        // Comprobar si ya existe un estudiante con ese RUT
-        const allStudents = db.getStudents();
-        const existing = allStudents.find(s => Number(s.rut) === Number(st.rut));
+          // Crear los cursos necesarios en un solo lote si aún no existen
+          db.saveCoursesBulk(cursosAfectados);
 
-        const studentRecord = {
-          id: existing ? existing.id : undefined,
-          rut: st.rut,
-          dv: st.dv,
-          nombres: st.nombres,
-          apellidoPaterno: st.apellidoPaterno,
-          apellidoMaterno: st.apellidoMaterno,
-          nivel: st.nivel
-        };
+          // Guardar todos los estudiantes en un solo lote ultra rápido (0 bloqueos)
+          const result = db.saveStudentsBulk(validStudents, mode, cursosAfectados);
 
-        const saved = db.saveStudent(studentRecord);
+          this.closeBulkModal();
+          this.render();
 
-        // Asegurar que tenga registro de asistencia base (90 días trabajados por defecto)
-        const currentAtt = db.getAttendanceByStudent(saved.id);
-        if (!currentAtt) {
-          db.saveStudentAttendance(saved.id, st.nivel, 90, 90);
+          window.showToast(`¡Carga masiva completada exitosamente! ${result.importedCount} matriculados, ${result.updatedCount} actualizados.`, 'success');
+        } catch (err) {
+          console.error('Error durante la importación masiva:', err);
+          window.showToast('Ocurrió un error al guardar los estudiantes', 'danger');
+          if (this.btnExecuteImport) {
+            this.btnExecuteImport.disabled = false;
+            this.btnExecuteImport.textContent = `✅ Confirmar e Importar (${validStudents.length} estudiantes válidos)`;
+          }
         }
-
-        if (existing) {
-          updatedCount++;
-        } else {
-          importedCount++;
-        }
-      });
-
-      this.closeBulkModal();
-      this.render();
-
-      window.showToast(`¡Carga masiva completada! ${importedCount} nuevos matriculados, ${updatedCount} actualizados.`, 'success');
+      }, 30);
     }
   }
 

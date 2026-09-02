@@ -48,13 +48,21 @@
 
       this.render();
 
+      let attDebounceTimer = null;
+      const debouncedRenderAtt = () => {
+        if (attDebounceTimer) clearTimeout(attDebounceTimer);
+        attDebounceTimer = setTimeout(() => {
+          this.render();
+        }, 60);
+      };
+
       window.addEventListener('students_updated', () => {
-        this.render();
+        debouncedRenderAtt();
       });
 
       window.addEventListener('courses_updated', () => {
         this.populateNivelSelect();
-        this.render();
+        debouncedRenderAtt();
       });
     }
 

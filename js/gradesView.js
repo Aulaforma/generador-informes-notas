@@ -66,19 +66,27 @@
       this.updateSubjectDropdown();
       this.render();
 
+      let gradesDebounceTimer = null;
+      const debouncedRenderGrades = () => {
+        if (gradesDebounceTimer) clearTimeout(gradesDebounceTimer);
+        gradesDebounceTimer = setTimeout(() => {
+          this.render();
+        }, 60);
+      };
+
       window.addEventListener('students_updated', () => {
-        this.render();
+        debouncedRenderGrades();
       });
 
       window.addEventListener('subjects_updated', () => {
         this.updateSubjectDropdown();
-        this.render();
+        debouncedRenderGrades();
       });
 
       window.addEventListener('courses_updated', () => {
         this.populateNivelSelect();
         this.updateSubjectDropdown();
-        this.render();
+        debouncedRenderGrades();
       });
     }
 

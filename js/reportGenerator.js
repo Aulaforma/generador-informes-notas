@@ -39,24 +39,32 @@
       this.populateNivelSelect();
       this.initEvents();
 
-      // Escuchar eventos globales de actualización
+      // Escuchar eventos globales de actualización con protección debounced (anticongelemiento)
+      let previewDebounceTimer = null;
+      const debouncedRenderPreview = () => {
+        if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+        previewDebounceTimer = setTimeout(() => {
+          this.renderPreview();
+        }, 60);
+      };
+
       window.addEventListener('school_config_updated', () => {
-        this.renderPreview();
+        debouncedRenderPreview();
       });
 
       window.addEventListener('students_updated', () => {
         this.updateStudentDropdown();
-        this.renderPreview();
+        debouncedRenderPreview();
       });
 
       window.addEventListener('subjects_updated', () => {
-        this.renderPreview();
+        debouncedRenderPreview();
       });
 
       window.addEventListener('courses_updated', () => {
         this.populateNivelSelect();
         this.updateStudentDropdown();
-        this.renderPreview();
+        debouncedRenderPreview();
       });
     }
 
