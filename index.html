@@ -48,7 +48,7 @@
   <!-- BARRA DE NAVEGACIÓN PRINCIPAL -->
   <nav class="app-navbar no-print">
     <button class="nav-tab-btn active" data-view="grades-view" id="tab-btn-grades">
-      <span>📝</span> Calificaciones (12 Notas)
+      <span>📝</span> Calificaciones (10 Notas)
     </button>
     <button class="nav-tab-btn" data-view="subjects-view" id="tab-btn-subjects">
       <span>🏫</span> Cursos y Asignaturas
@@ -160,8 +160,6 @@
                 <th class="col-grade">N8</th>
                 <th class="col-grade">N9</th>
                 <th class="col-grade">N10</th>
-                <th class="col-grade">N11</th>
-                <th class="col-grade">N12</th>
                 <th class="col-avg" id="th-sem-avg" style="background: #dbeafe; color: #1e40af;">PROM. 1° SEM</th>
                 <th class="col-avg" style="background: #1e3a8a; color: white;" title="Promedio Final Anual (1° y 2° Semestre)">PROM. FINAL</th>
               </tr>
@@ -171,7 +169,7 @@
             </tbody>
             <tfoot>
               <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
-                <td colspan="14" style="text-align: right; padding: 0.75rem 1rem; color: #1e3a8a;">
+                <td colspan="12" style="text-align: right; padding: 0.75rem 1rem; color: #1e3a8a;">
                   PROMEDIO GENERAL DEL CURSO EN ESTA ASIGNATURA:
                 </td>
                 <td id="footer-course-avg" style="text-align: center; font-size: 1.05rem; font-weight: 800; color: #1e3a8a; background: #e0e7ff;">
@@ -869,15 +867,15 @@
   <div class="toast-container no-print"></div>
 
   <!-- SCRIPTS EN ORDEN DE DEPENDENCIAS (COMPATIBILIDAD TOTAL LOCAL Y SERVIDOR) -->
-  <script src="./js/db.js?v=1.4.5"></script>
-  <script src="./js/seedData.js?v=1.4.5"></script>
-  <script src="./js/configView.js?v=1.4.5"></script>
-  <script src="./js/subjectsView.js?v=1.4.5"></script>
-  <script src="./js/studentsView.js?v=1.4.5"></script>
-  <script src="./js/gradesView.js?v=1.4.5"></script>
-  <script src="./js/attendanceView.js?v=1.4.5"></script>
-  <script src="./js/reportGenerator.js?v=1.4.5"></script>
-  <script src="./js/pdfExport.js?v=1.4.5"></script>
-  <script src="./js/app.js?v=1.4.5"></script>
+  <script src="./js/db.js?v=1.4.6"></script>
+  <script src="./js/seedData.js?v=1.4.6"></script>
+  <script src="./js/configView.js?v=1.4.6"></script>
+  <script src="./js/subjectsView.js?v=1.4.6"></script>
+  <script src="./js/studentsView.js?v=1.4.6"></script>
+  <script src="./js/gradesView.js?v=1.4.6"></script>
+  <script src="./js/attendanceView.js?v=1.4.6"></script>
+  <script src="./js/reportGenerator.js?v=1.4.6"></script>
+  <script src="./js/pdfExport.js?v=1.4.6"></script>
+  <script src="./js/app.js?v=1.4.6"></script>
 </body>
 </html>

@@ -304,9 +304,9 @@
       let evaluatedStudentAverages = [];
 
       const rowsHtml = students.map((std, index) => {
-        // Obtener calificaciones del semestre activo
+        // Obtener calificaciones del semestre activo (10 evaluaciones por semestre)
         const gradeRecord = db.getGradesForStudentAndSubject(std.id, this.currentSubject, this.currentSemestre);
-        const notes = (gradeRecord && gradeRecord.notes) ? gradeRecord.notes : Array(12).fill(null);
+        const notes = (gradeRecord && gradeRecord.notes) ? gradeRecord.notes : Array(10).fill(null);
         const studentSemAvg = (gradeRecord && gradeRecord.promedio !== null && gradeRecord.promedio !== undefined) ? gradeRecord.promedio : null;
 
         // Obtener promedio final anual proyectado (combinando 1S y 2S)
@@ -316,7 +316,7 @@
           evaluatedStudentAverages.push(studentSemAvg);
         }
 
-        const cellsHtml = Array.from({ length: 12 }).map((_, cIdx) => {
+        const cellsHtml = Array.from({ length: 10 }).map((_, cIdx) => {
           const val = notes[cIdx];
           const displayVal = val !== null && val !== undefined && val !== '' ? String(val).replace('.', ',') : '';
           const numVal = parseFloat(String(val).replace(',', '.'));
@@ -484,10 +484,11 @@
         inputEl.classList.remove('is-red', 'is-blue');
       }
 
-      // Guardar nota en el semestre activo
+      // Guardar nota en el semestre activo (10 evaluaciones por semestre)
       const currentRecord = db.getGradesForStudentAndSubject(studentId, this.currentSubject, this.currentSemestre);
-      let notes = (currentRecord && currentRecord.notes) ? [...currentRecord.notes] : Array(12).fill(null);
-      while (notes.length < 12) notes.push(null);
+      let notes = (currentRecord && currentRecord.notes) ? [...currentRecord.notes] : Array(10).fill(null);
+      while (notes.length < 10) notes.push(null);
+      notes = notes.slice(0, 10);
 
       notes[colIndex] = parsedVal;
 

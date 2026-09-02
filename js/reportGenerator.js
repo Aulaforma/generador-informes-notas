@@ -202,17 +202,17 @@
           mainTitle = noIncide ? `${sub.nombre} *` : sub.nombre;
         }
 
-        // Notas parciales 1° Semestre (hasta 6 evaluaciones visibles)
-        const n1Cells = Array.from({ length: 6 }).map((_, i) => {
+        // Notas parciales 1° Semestre (10 evaluaciones oficiales por semestre)
+        const n1Cells = Array.from({ length: 10 }).map((_, i) => {
           const val = notes1[i];
-          if (val === null || val === undefined || val === '') return `<td class="center" style="width: 20px; font-size: 7pt; color: #cbd5e1;">-</td>`;
+          if (val === null || val === undefined || val === '') return `<td class="center grade-cell" style="width: 17px; font-size: 6.8pt; color: #cbd5e1; padding: 2px 0;">-</td>`;
           if (isConceptual) {
             const c = convertToConcept(val);
-            return `<td class="center" style="width: 20px; font-size: 7.2pt; font-weight: 700;">${c}</td>`;
+            return `<td class="center grade-cell" style="width: 17px; font-size: 6.8pt; font-weight: 700; padding: 2px 0;">${c}</td>`;
           }
           const num = Number(val);
-          const colorCls = num < 4.0 ? 'style="color: #b91c1c; font-weight: 700; width: 20px; font-size: 7.2pt;"' : 'style="width: 20px; font-size: 7.2pt;"';
-          return `<td class="center" ${colorCls}>${formatGrade(num)}</td>`;
+          const colorCls = num < 4.0 ? 'style="color: #b91c1c; font-weight: 700; width: 17px; font-size: 6.8pt; padding: 2px 0;"' : 'style="width: 17px; font-size: 6.8pt; padding: 2px 0;"';
+          return `<td class="center grade-cell" ${colorCls}>${formatGrade(num)}</td>`;
         }).join('');
 
         // Promedio 1° Semestre
@@ -228,17 +228,17 @@
           }
         }
 
-        // Notas parciales 2° Semestre (hasta 6 evaluaciones visibles)
-        const n2Cells = Array.from({ length: 6 }).map((_, i) => {
+        // Notas parciales 2° Semestre (10 evaluaciones oficiales por semestre)
+        const n2Cells = Array.from({ length: 10 }).map((_, i) => {
           const val = notes2[i];
-          if (val === null || val === undefined || val === '') return `<td class="center" style="width: 20px; font-size: 7pt; color: #cbd5e1;">-</td>`;
+          if (val === null || val === undefined || val === '') return `<td class="center grade-cell" style="width: 17px; font-size: 6.8pt; color: #cbd5e1; padding: 2px 0;">-</td>`;
           if (isConceptual) {
             const c = convertToConcept(val);
-            return `<td class="center" style="width: 20px; font-size: 7.2pt; font-weight: 700;">${c}</td>`;
+            return `<td class="center grade-cell" style="width: 17px; font-size: 6.8pt; font-weight: 700; padding: 2px 0;">${c}</td>`;
           }
           const num = Number(val);
-          const colorCls = num < 4.0 ? 'style="color: #b91c1c; font-weight: 700; width: 20px; font-size: 7.2pt;"' : 'style="width: 20px; font-size: 7.2pt;"';
-          return `<td class="center" ${colorCls}>${formatGrade(num)}</td>`;
+          const colorCls = num < 4.0 ? 'style="color: #b91c1c; font-weight: 700; width: 17px; font-size: 6.8pt; padding: 2px 0;"' : 'style="width: 17px; font-size: 6.8pt; padding: 2px 0;"';
+          return `<td class="center grade-cell" ${colorCls}>${formatGrade(num)}</td>`;
         }).join('');
 
         // Promedio 2° Semestre
@@ -361,35 +361,43 @@
           </div>
 
           <!-- 3. Tabla Comparativa de Calificaciones Horizontal (1° Semestre | 2° Semestre | Final) -->
-          <table class="report-grades-table sheet-table" style="width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 7.5pt;">
+          <table class="report-grades-table sheet-table" style="width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 7.2pt;">
             <thead>
               <tr style="background: #1e3a8a; color: white;">
-                <th rowspan="2" class="center" style="width: 22px; vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7pt;">#</th>
-                <th rowspan="2" class="center" style="width: 38px; vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7pt;">CÓD.</th>
-                <th rowspan="2" style="vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7.5pt; text-align: left; padding-left: 6px;">ASIGNATURA / SUBSECTOR</th>
-                <th colspan="7" class="center" style="border: 1px solid #1e3a8a; background: #1e40af; font-size: 7.5pt; padding: 2px;">1° SEMESTRE</th>
-                <th colspan="7" class="center" style="border: 1px solid #1e3a8a; background: #c2410c; font-size: 7.5pt; padding: 2px;">2° SEMESTRE</th>
-                <th rowspan="2" class="center" style="width: 50px; vertical-align: middle; border: 1px solid #1e3a8a; background: #0f172a; font-size: 7.5pt;">PROM. FINAL</th>
-                <th rowspan="2" class="center" style="width: 48px; vertical-align: middle; border: 1px solid #1e3a8a; background: #334155; font-size: 7pt;">PROM. CURSO</th>
+                <th rowspan="2" class="center" style="width: 20px; vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7pt;">#</th>
+                <th rowspan="2" class="center" style="width: 32px; vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7pt;">CÓD.</th>
+                <th rowspan="2" style="vertical-align: middle; border: 1px solid #1e3a8a; font-size: 7.5pt; text-align: left; padding-left: 5px;">ASIGNATURA / SUBSECTOR</th>
+                <th colspan="11" class="center" style="border: 1px solid #1e3a8a; background: #1e40af; font-size: 7.5pt; padding: 2px;">1° SEMESTRE</th>
+                <th colspan="11" class="center" style="border: 1px solid #1e3a8a; background: #c2410c; font-size: 7.5pt; padding: 2px;">2° SEMESTRE</th>
+                <th rowspan="2" class="center" style="width: 44px; vertical-align: middle; border: 1px solid #1e3a8a; background: #0f172a; font-size: 7.5pt;">PROM. FINAL</th>
+                <th rowspan="2" class="center" style="width: 42px; vertical-align: middle; border: 1px solid #1e3a8a; background: #334155; font-size: 7pt;">PROM. CURSO</th>
               </tr>
-              <tr style="background: #2563eb; color: white; font-size: 6.8pt;">
-                <!-- Subcolumnas 1° Semestre -->
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N1</th>
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N2</th>
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N3</th>
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N4</th>
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N5</th>
-                <th class="center" style="width: 20px; border: 1px solid #1e3a8a;">N6</th>
-                <th class="center" style="width: 38px; border: 1px solid #1e3a8a; background: #1e3a8a; font-weight: 800;">PROM 1S</th>
+              <tr style="background: #2563eb; color: white; font-size: 6.5pt;">
+                <!-- Subcolumnas 1° Semestre (10 Notas + Promedio 1S) -->
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N1</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N2</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N3</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N4</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N5</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N6</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N7</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N8</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N9</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #1e3a8a; padding: 2px 0;">N10</th>
+                <th class="center" style="width: 34px; border: 1px solid #1e3a8a; background: #1e3a8a; font-weight: 800; padding: 2px 1px; font-size: 6.5pt;">PROM 1S</th>
 
-                <!-- Subcolumnas 2° Semestre -->
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N1</th>
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N2</th>
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N3</th>
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N4</th>
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N5</th>
-                <th class="center" style="width: 20px; border: 1px solid #c2410c; background: #ea580c;">N6</th>
-                <th class="center" style="width: 38px; border: 1px solid #c2410c; background: #9a3412; font-weight: 800;">PROM 2S</th>
+                <!-- Subcolumnas 2° Semestre (10 Notas + Promedio 2S) -->
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N1</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N2</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N3</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N4</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N5</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N6</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N7</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N8</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N9</th>
+                <th class="center grade-subcol" style="width: 17px; border: 1px solid #c2410c; background: #ea580c; padding: 2px 0;">N10</th>
+                <th class="center" style="width: 34px; border: 1px solid #c2410c; background: #9a3412; font-weight: 800; padding: 2px 1px; font-size: 6.5pt;">PROM 2S</th>
               </tr>
             </thead>
             <tbody>

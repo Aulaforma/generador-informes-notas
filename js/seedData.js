@@ -169,10 +169,10 @@
       // 2. Calificaciones en cada asignatura
       asignaturasPrueba.forEach((asig, aIdx) => {
         const isConceptSubject = asig.toLowerCase().includes('orientacion') || asig.toLowerCase().includes('religion');
-        const numEvaluaciones = isConceptSubject ? 4 : 6 + (aIdx % 4);
+        const numEvaluaciones = isConceptSubject ? 4 : 5 + (aIdx % 4);
         const notas = [];
 
-        for (let c = 0; c < 12; c++) {
+        for (let c = 0; c < 10; c++) {
           if (c < numEvaluaciones) {
             if (idx === 0 && aIdx === 0 && c < 7) {
               const testNotes = [6.8, 6.5, 6.7, 6.2, 6.9, 6.3, 6.6];
