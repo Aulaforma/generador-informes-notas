@@ -153,58 +153,40 @@
       });
     }
 
-    // 7. Módulo de Compartir la Página con Datos Ingresados
+    // 7. Módulo de Compartir Enlaces Cortos (Docentes y Administrador)
     const btnShareData = document.getElementById('btn-share-data');
     const shareModal = document.getElementById('share-data-modal');
     const shareModalCloseBtn = document.getElementById('share-modal-close-btn');
     const shareModalCancelBtn = document.getElementById('share-modal-cancel-btn');
-    const shareUrlInput = document.getElementById('share-url-input');
-    const shareUrlHint = document.getElementById('share-url-hint');
-    const btnCopyShareUrl = document.getElementById('btn-copy-share-url');
+    const shareUrlDocenteInput = document.getElementById('share-url-docente');
+    const shareUrlAdminInput = document.getElementById('share-url-admin');
+    const btnCopyDocenteUrl = document.getElementById('btn-copy-docente-url');
+    const btnCopyAdminUrl = document.getElementById('btn-copy-admin-url');
+    const inputMasterPin = document.getElementById('input-master-pin');
+    const btnSaveMasterPin = document.getElementById('btn-save-master-pin');
     const btnDownloadShareFile = document.getElementById('btn-download-share-file');
 
-    const openShareModal = async () => {
+    const openShareModal = () => {
       if (!shareModal) return;
       shareModal.classList.add('active');
 
-      if (shareUrlInput) {
-        shareUrlInput.value = 'Generando enlace comprimido...';
+      // Base URL pública
+      let baseUrl = window.location.origin + window.location.pathname;
+      if (window.location.protocol === 'file:') {
+        baseUrl = 'https://aulaforma.github.io/generador-informes-notas/';
       }
-      if (shareUrlHint) {
-        shareUrlHint.textContent = 'Procesando datos del establecimiento...';
-      }
 
-      try {
-        const backup = window.db.exportBackup();
-        const jsonStr = JSON.stringify(backup);
-        const payload = await compressData(jsonStr);
+      // Código de sala institucional (RBD o configurado)
+      const room = window.cloudSync?.getRoomCode() || window.db?.getConfig()?.rbd || 'RBD-4580-1';
 
-        // Si se ejecuta en local (file://), generar el enlace hacia la web pública de GitHub Pages
-        let baseUrl = window.location.origin + window.location.pathname;
-        if (window.location.protocol === 'file:') {
-          baseUrl = 'https://aulaforma.github.io/generador-informes-notas/';
-        }
+      // Enlace corto limpio para Docentes (WhatsApp / Correo)
+      const docenteUrl = `${baseUrl}?sala=${encodeURIComponent(room)}&rol=docente`;
+      // Enlace corto limpio para Administrador
+      const adminUrl = `${baseUrl}?sala=${encodeURIComponent(room)}&rol=admin`;
 
-        const shareUrl = `${baseUrl}#share=${payload}`;
-
-        if (shareUrlInput) {
-          shareUrlInput.value = shareUrl;
-        }
-
-        if (shareUrlHint) {
-          if (shareUrl.length > 25000) {
-            shareUrlHint.innerHTML = `⚠️ <strong>Nómina amplia:</strong> El enlace contiene gran volumen de datos (${Math.round(shareUrl.length / 1024)} KB). Si alguna aplicación de mensajería recorta el link, recomendamos usar la <strong>Opción 2</strong> (archivo .json).`;
-            shareUrlHint.style.color = '#b45309';
-          } else {
-            shareUrlHint.innerHTML = `✅ <strong>Enlace listo:</strong> Quien lo abra en su computador o celular cargará de inmediato tu nómina de estudiantes, calificaciones y asistencia.`;
-            shareUrlHint.style.color = '#15803d';
-          }
-        }
-      } catch (err) {
-        console.error('Error al generar enlace compartible:', err);
-        if (shareUrlInput) shareUrlInput.value = 'No fue posible generar el enlace directo.';
-        if (shareUrlHint) shareUrlHint.textContent = 'Utilice la Opción 2 para descargar el archivo de datos directamente.';
-      }
+      if (shareUrlDocenteInput) shareUrlDocenteInput.value = docenteUrl;
+      if (shareUrlAdminInput) shareUrlAdminInput.value = adminUrl;
+      if (inputMasterPin) inputMasterPin.value = window.db?.getMasterPin() || '4580';
     };
 
     const closeShareModal = () => {
@@ -220,18 +202,43 @@
       });
     }
 
-    if (btnCopyShareUrl && shareUrlInput) {
-      btnCopyShareUrl.addEventListener('click', () => {
-        if (!shareUrlInput.value || shareUrlInput.value.startsWith('Generando')) return;
-        navigator.clipboard.writeText(shareUrlInput.value)
+    if (btnCopyDocenteUrl && shareUrlDocenteInput) {
+      btnCopyDocenteUrl.addEventListener('click', () => {
+        navigator.clipboard.writeText(shareUrlDocenteInput.value)
           .then(() => {
-            window.showToast('📋 ¡Enlace copiado al portapapeles! Puedes enviarlo a tus colegas.', 'success', 4500);
+            window.showToast('📋 ¡Enlace Docente copiado! Listo para enviar a tus profesores por WhatsApp o correo.', 'success', 5000);
           })
           .catch(() => {
-            shareUrlInput.select();
+            shareUrlDocenteInput.select();
             document.execCommand('copy');
             window.showToast('📋 ¡Enlace copiado al portapapeles!', 'success');
           });
+      });
+    }
+
+    if (btnCopyAdminUrl && shareUrlAdminInput) {
+      btnCopyAdminUrl.addEventListener('click', () => {
+        navigator.clipboard.writeText(shareUrlAdminInput.value)
+          .then(() => {
+            window.showToast('👑 ¡Enlace de Administrador copiado! Guárdalo para ti.', 'success', 5000);
+          })
+          .catch(() => {
+            shareUrlAdminInput.select();
+            document.execCommand('copy');
+            window.showToast('👑 ¡Enlace copiado al portapapeles!', 'success');
+          });
+      });
+    }
+
+    if (btnSaveMasterPin && inputMasterPin) {
+      btnSaveMasterPin.addEventListener('click', () => {
+        const newPin = inputMasterPin.value.trim();
+        if (!newPin) {
+          window.showToast('La clave maestra no puede estar vacía', 'warning');
+          return;
+        }
+        window.db?.setMasterPin(newPin);
+        window.showToast(`🔐 Clave Maestra actualizada a: "${newPin}". Solo tú dominarás el sistema.`, 'success', 5000);
       });
     }
 
@@ -240,6 +247,149 @@
         downloadBackupJson();
       });
     }
+
+    // --- GESTIÓN DE ROLES (ADMINISTRADOR MAESTRO vs DOCENTE) ---
+    const btnRoleBadge = document.getElementById('btn-role-badge');
+    const roleBadgeIcon = document.getElementById('role-badge-icon');
+    const roleBadgeText = document.getElementById('role-badge-text');
+    const masterAuthModal = document.getElementById('master-auth-modal');
+    const masterAuthCloseBtn = document.getElementById('master-auth-close-btn');
+    const masterAuthCancelBtn = document.getElementById('master-auth-cancel-btn');
+    const authPinInput = document.getElementById('auth-pin-input');
+    const btnSubmitMasterAuth = document.getElementById('btn-submit-master-auth');
+    let pendingAdminAction = null;
+
+    const applyRoleUI = (role) => {
+      const isMaster = role === 'admin';
+      if (btnRoleBadge) {
+        if (isMaster) {
+          btnRoleBadge.style.background = '#eff6ff';
+          btnRoleBadge.style.borderColor = '#bfdbfe';
+          btnRoleBadge.style.color = '#1e40af';
+          if (roleBadgeIcon) roleBadgeIcon.textContent = '👑';
+          if (roleBadgeText) roleBadgeText.textContent = 'Modo Administrador';
+        } else {
+          btnRoleBadge.style.background = '#f0fdf4';
+          btnRoleBadge.style.borderColor = '#bbf7d0';
+          btnRoleBadge.style.color = '#166534';
+          if (roleBadgeIcon) roleBadgeIcon.textContent = '👨‍🏫';
+          if (roleBadgeText) roleBadgeText.textContent = 'Modo Docente';
+        }
+      }
+
+      // Bloquear visualmente pestañas reservadas
+      const tabConfig = document.getElementById('tab-btn-config');
+      if (tabConfig) {
+        if (!isMaster) {
+          tabConfig.style.opacity = '0.55';
+          tabConfig.title = '🔒 Bloqueado: Solo Administrador';
+        } else {
+          tabConfig.style.opacity = '1';
+          tabConfig.title = 'Membrete y Configuración Institucional';
+        }
+      }
+    };
+
+    window.addEventListener('role_changed', (e) => {
+      applyRoleUI(e.detail.role);
+    });
+
+    const openMasterAuthModal = (callback = null) => {
+      pendingAdminAction = callback;
+      if (!masterAuthModal) return;
+      masterAuthModal.classList.add('active');
+      if (authPinInput) {
+        authPinInput.value = '';
+        setTimeout(() => authPinInput.focus(), 150);
+      }
+    };
+
+    const closeMasterAuthModal = () => {
+      if (masterAuthModal) masterAuthModal.classList.remove('active');
+      pendingAdminAction = null;
+    };
+
+    if (masterAuthCloseBtn) masterAuthCloseBtn.addEventListener('click', closeMasterAuthModal);
+    if (masterAuthCancelBtn) masterAuthCancelBtn.addEventListener('click', closeMasterAuthModal);
+    if (masterAuthModal) {
+      masterAuthModal.addEventListener('click', (e) => {
+        if (e.target === masterAuthModal) closeMasterAuthModal();
+      });
+    }
+
+    if (btnSubmitMasterAuth && authPinInput) {
+      const verifyAndUnlock = () => {
+        const pin = authPinInput.value.trim();
+        if (window.db?.verifyMasterPin(pin)) {
+          window.db.setCurrentRole('admin');
+          closeMasterAuthModal();
+          window.showToast('🔓 Modo Administrador activado con éxito. Control total habilitado.', 'success', 5000);
+          if (typeof pendingAdminAction === 'function') {
+            pendingAdminAction();
+          }
+        } else {
+          window.showToast('Clave Maestra incorrecta. Inténtalo de nuevo.', 'danger');
+          authPinInput.select();
+        }
+      };
+
+      btnSubmitMasterAuth.addEventListener('click', verifyAndUnlock);
+      authPinInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') verifyAndUnlock();
+      });
+    }
+
+    if (btnRoleBadge) {
+      btnRoleBadge.addEventListener('click', () => {
+        if (window.db?.isMaster()) {
+          if (confirm('Actualmente estás en MODO ADMINISTRADOR (Control Total).\n\n¿Deseas cambiar a MODO DOCENTE para probar cómo lo verán tus profesores?')) {
+            window.db.setCurrentRole('docente');
+            window.showToast('👨‍🏫 Cambiado a Modo Docente. Funciones administrativas protegidas.', 'info', 4000);
+          }
+        } else {
+          openMasterAuthModal();
+        }
+      });
+    }
+
+    // Interceptar acciones protegidas en Modo Docente
+    const tabConfigBtn = document.getElementById('tab-btn-config');
+    if (tabConfigBtn) {
+      tabConfigBtn.addEventListener('click', (e) => {
+        if (!window.db?.isMaster()) {
+          e.preventDefault();
+          e.stopPropagation();
+          openMasterAuthModal(() => {
+            tabConfigBtn.click();
+          });
+        }
+      }, true);
+    }
+
+    const clearStudentsBtn = document.getElementById('btn-clear-all-students');
+    if (clearStudentsBtn) {
+      clearStudentsBtn.addEventListener('click', (e) => {
+        if (!window.db?.isMaster()) {
+          e.preventDefault();
+          e.stopPropagation();
+          openMasterAuthModal();
+        }
+      }, true);
+    }
+
+    const resetDemoBtnRef = document.getElementById('btn-reset-demo');
+    if (resetDemoBtnRef) {
+      resetDemoBtnRef.addEventListener('click', (e) => {
+        if (!window.db?.isMaster()) {
+          e.preventDefault();
+          e.stopPropagation();
+          openMasterAuthModal();
+        }
+      }, true);
+    }
+
+    // Aplicar rol inicial
+    applyRoleUI(window.db?.getCurrentRole() || 'admin');
 
     // Soporte para arrastrar archivos .json de datos a cualquier parte de la ventana
     window.addEventListener('dragover', (e) => e.preventDefault());
@@ -492,14 +642,59 @@
 
   async function checkSharedDataInUrl() {
     try {
+      const params = new URLSearchParams(window.location.search);
+
+      // 1. Verificación de Rol por URL (?rol=docente o ?rol=admin)
+      if (params.has('rol')) {
+        const rolParam = params.get('rol').toLowerCase();
+        if (rolParam === 'docente') {
+          window.db?.setCurrentRole('docente');
+          window.showToast('👨‍🏫 Acceso en Modo Docente. Selecciona tu curso y asignatura para ingresar notas.', 'info', 6000);
+        } else if (rolParam === 'admin') {
+          // Si entra con rol admin por URL, validar Clave Maestra
+          setTimeout(() => {
+            const pin = prompt('🔐 Ingrese su Clave Maestra de Administrador para acceder:');
+            if (window.db?.verifyMasterPin(pin)) {
+              window.db.setCurrentRole('admin');
+              window.showToast('👑 Bienvenido(a) al Modo Administrador. Control total activado.', 'success', 5000);
+            } else {
+              window.db?.setCurrentRole('docente');
+              window.showToast('Clave Maestra no ingresada. Modo Docente activado por seguridad.', 'warning', 5000);
+            }
+          }, 300);
+        }
+      }
+
+      // 2. Conexión automática por Sala en la Nube (?sala=RBD-4580-1)
+      if (params.has('sala')) {
+        const salaCode = params.get('sala').trim().toUpperCase();
+        if (salaCode && window.cloudSync) {
+          const fbConfig = window.cloudSync.getSavedFirebaseConfig() || {
+            apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
+            authDomain: "generador-notas-colegio.firebaseapp.com",
+            projectId: "generador-notas-colegio",
+            storageBucket: "generador-notas-colegio.appspot.com",
+            messagingSenderId: "109847291029",
+            appId: "1:109847291029:web:38b819f8a0e2340b"
+          };
+          window.cloudSync.connect(fbConfig, salaCode, false)
+            .then(() => {
+              window.showToast(`☁️ Conectado a la Sala de Colegio: ${salaCode}`, 'success', 5000);
+            })
+            .catch(err => {
+              console.warn('Conexión automática a sala:', err.message);
+            });
+        }
+      }
+
+      // 3. Fallback de Enlace Comprimido (#share=...)
       let payload = '';
       if (window.location.hash.startsWith('#share=')) {
         payload = window.location.hash.slice(7);
       } else if (window.location.hash.startsWith('#data=')) {
         payload = window.location.hash.slice(6);
-      } else {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('share')) payload = params.get('share');
+      } else if (params.has('share')) {
+        payload = params.get('share');
       }
 
       if (!payload) return;

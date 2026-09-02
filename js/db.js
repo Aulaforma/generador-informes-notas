@@ -20,7 +20,9 @@
     ATTENDANCE: 'laa_attendance',
     COURSE_SUBJECTS: 'laa_course_subjects',
     COURSES: 'laa_courses',
-    INITIALIZED: 'laa_db_initialized'
+    INITIALIZED: 'laa_db_initialized',
+    MASTER_PIN: 'laa_master_pin',
+    CURRENT_ROLE: 'laa_current_role'
   };
 
   // Catálogo oficial de niveles según requerimiento
@@ -1191,6 +1193,41 @@
       localStorage.setItem(DB_KEYS.INITIALIZED, 'true');
       window.location.reload();
       return true;
+    }
+
+    // --- GESTIÓN DE ROLES Y CLAVE MAESTRA (CONTROL ADMINISTRADOR vs DOCENTE) ---
+    getMasterPin() {
+      const saved = localStorage.getItem(DB_KEYS.MASTER_PIN);
+      if (saved) return String(saved).trim();
+      const rbdPart = (this.getConfig()?.rbd || '4580').split('-')[0].replace(/[^0-9]/g, '');
+      return rbdPart || '4580';
+    }
+
+    setMasterPin(newPin) {
+      const clean = String(newPin || '').trim();
+      if (!clean) return false;
+      localStorage.setItem(DB_KEYS.MASTER_PIN, clean);
+      return true;
+    }
+
+    verifyMasterPin(pin) {
+      if (!pin) return false;
+      return String(pin).trim() === this.getMasterPin();
+    }
+
+    getCurrentRole() {
+      return localStorage.getItem(DB_KEYS.CURRENT_ROLE) || 'admin';
+    }
+
+    setCurrentRole(role) {
+      const validRole = role === 'docente' ? 'docente' : 'admin';
+      localStorage.setItem(DB_KEYS.CURRENT_ROLE, validRole);
+      window.dispatchEvent(new CustomEvent('role_changed', { detail: { role: validRole } }));
+      return validRole;
+    }
+
+    isMaster() {
+      return this.getCurrentRole() === 'admin';
     }
   }
 
