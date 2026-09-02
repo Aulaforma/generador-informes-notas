@@ -118,16 +118,21 @@
     const exportBackupBtn = document.getElementById('btn-export-backup');
     if (exportBackupBtn) {
       exportBackupBtn.addEventListener('click', () => {
-        const backup = window.db.exportBackup();
-        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Respaldo_Liceo_Andres_Alcazar_${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        window.showToast('Respaldo del sistema descargado en JSON', 'success');
+        downloadBackupJson();
       });
+    }
+
+    function downloadBackupJson() {
+      const backup = window.db.exportBackup();
+      const schoolName = (backup.config?.nombre || 'Liceo').replace(/[^a-zA-Z0-9]/g, '_');
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Datos_${schoolName}_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      window.showToast('Archivo de datos descargado con éxito (.json)', 'success');
     }
 
     const importBackupInput = document.getElementById('input-import-backup');
@@ -148,10 +153,206 @@
       });
     }
 
+    // 7. Módulo de Compartir la Página con Datos Ingresados
+    const btnShareData = document.getElementById('btn-share-data');
+    const shareModal = document.getElementById('share-data-modal');
+    const shareModalCloseBtn = document.getElementById('share-modal-close-btn');
+    const shareModalCancelBtn = document.getElementById('share-modal-cancel-btn');
+    const shareUrlInput = document.getElementById('share-url-input');
+    const shareUrlHint = document.getElementById('share-url-hint');
+    const btnCopyShareUrl = document.getElementById('btn-copy-share-url');
+    const btnDownloadShareFile = document.getElementById('btn-download-share-file');
+
+    const openShareModal = async () => {
+      if (!shareModal) return;
+      shareModal.classList.add('active');
+
+      if (shareUrlInput) {
+        shareUrlInput.value = 'Generando enlace comprimido...';
+      }
+      if (shareUrlHint) {
+        shareUrlHint.textContent = 'Procesando datos del establecimiento...';
+      }
+
+      try {
+        const backup = window.db.exportBackup();
+        const jsonStr = JSON.stringify(backup);
+        const payload = await compressData(jsonStr);
+
+        // Si se ejecuta en local (file://), generar el enlace hacia la web pública de GitHub Pages
+        let baseUrl = window.location.origin + window.location.pathname;
+        if (window.location.protocol === 'file:') {
+          baseUrl = 'https://aulaforma.github.io/generador-informes-notas/';
+        }
+
+        const shareUrl = `${baseUrl}#share=${payload}`;
+
+        if (shareUrlInput) {
+          shareUrlInput.value = shareUrl;
+        }
+
+        if (shareUrlHint) {
+          if (shareUrl.length > 25000) {
+            shareUrlHint.innerHTML = `⚠️ <strong>Nómina amplia:</strong> El enlace contiene gran volumen de datos (${Math.round(shareUrl.length / 1024)} KB). Si alguna aplicación de mensajería recorta el link, recomendamos usar la <strong>Opción 2</strong> (archivo .json).`;
+            shareUrlHint.style.color = '#b45309';
+          } else {
+            shareUrlHint.innerHTML = `✅ <strong>Enlace listo:</strong> Quien lo abra en su computador o celular cargará de inmediato tu nómina de estudiantes, calificaciones y asistencia.`;
+            shareUrlHint.style.color = '#15803d';
+          }
+        }
+      } catch (err) {
+        console.error('Error al generar enlace compartible:', err);
+        if (shareUrlInput) shareUrlInput.value = 'No fue posible generar el enlace directo.';
+        if (shareUrlHint) shareUrlHint.textContent = 'Utilice la Opción 2 para descargar el archivo de datos directamente.';
+      }
+    };
+
+    const closeShareModal = () => {
+      if (shareModal) shareModal.classList.remove('active');
+    };
+
+    if (btnShareData) btnShareData.addEventListener('click', openShareModal);
+    if (shareModalCloseBtn) shareModalCloseBtn.addEventListener('click', closeShareModal);
+    if (shareModalCancelBtn) shareModalCancelBtn.addEventListener('click', closeShareModal);
+    if (shareModal) {
+      shareModal.addEventListener('click', (e) => {
+        if (e.target === shareModal) closeShareModal();
+      });
+    }
+
+    if (btnCopyShareUrl && shareUrlInput) {
+      btnCopyShareUrl.addEventListener('click', () => {
+        if (!shareUrlInput.value || shareUrlInput.value.startsWith('Generando')) return;
+        navigator.clipboard.writeText(shareUrlInput.value)
+          .then(() => {
+            window.showToast('📋 ¡Enlace copiado al portapapeles! Puedes enviarlo a tus colegas.', 'success', 4500);
+          })
+          .catch(() => {
+            shareUrlInput.select();
+            document.execCommand('copy');
+            window.showToast('📋 ¡Enlace copiado al portapapeles!', 'success');
+          });
+      });
+    }
+
+    if (btnDownloadShareFile) {
+      btnDownloadShareFile.addEventListener('click', () => {
+        downloadBackupJson();
+      });
+    }
+
+    // Soporte para arrastrar archivos .json de datos a cualquier parte de la ventana
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file && file.name.endsWith('.json')) {
+        e.preventDefault();
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = JSON.parse(evt.target.result);
+            const school = data.config?.nombre || 'Establecimiento';
+            const count = data.students?.length || 0;
+            if (confirm(`📥 Archivo de datos detectado: "${file.name}"\n\nEstablecimiento: ${school}\nEstudiantes: ${count}\n\n¿Deseas restaurar y visualizar toda la información contenida en este archivo?`)) {
+              window.db.importBackup(data);
+            }
+          } catch (err) {
+            window.showToast('El archivo no tiene un formato de respaldo JSON válido', 'danger');
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    // 8. Auto-carga si la página fue abierta con un enlace compartido (#share=...)
+    checkSharedDataInUrl();
+
     // Inicializar preview de informes en segundo plano
     if (window.reportGenerator) {
       window.reportGenerator.renderPreview();
     }
   });
+
+  // Funciones de compresión y descompresión nativa para compartir enlaces
+  async function compressData(str) {
+    if (typeof CompressionStream !== 'undefined') {
+      try {
+        const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('deflate'));
+        const buffer = await new Response(stream).arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunk = 8192;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return 'c_' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      } catch (e) {
+        console.warn('Compresión nativa falló, usando fallback URI:', e);
+      }
+    }
+    return 'r_' + encodeURIComponent(str);
+  }
+
+  async function decompressData(payload) {
+    if (!payload) return null;
+    if (payload.startsWith('c_')) {
+      const base64Url = payload.slice(2);
+      let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+      return await new Response(stream).text();
+    } else if (payload.startsWith('r_')) {
+      return decodeURIComponent(payload.slice(2));
+    } else {
+      let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+      return await new Response(stream).text();
+    }
+  }
+
+  async function checkSharedDataInUrl() {
+    try {
+      let payload = '';
+      if (window.location.hash.startsWith('#share=')) {
+        payload = window.location.hash.slice(7);
+      } else if (window.location.hash.startsWith('#data=')) {
+        payload = window.location.hash.slice(6);
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('share')) payload = params.get('share');
+      }
+
+      if (!payload) return;
+
+      const jsonStr = await decompressData(payload);
+      if (!jsonStr) return;
+      const parsed = JSON.parse(jsonStr);
+
+      const schoolName = parsed.config?.nombre || 'Colegio / Liceo';
+      const studentCount = parsed.students?.length || 0;
+      const courseCount = parsed.courses?.length || 0;
+
+      setTimeout(() => {
+        if (confirm(`📥 ENLACE COMPARTIDO RECIBIDO:\n\nSe ha abierto un enlace con la información académica de:\n"${schoolName}"\n• ${studentCount} estudiantes matriculados\n• ${courseCount} cursos configurados\n• Calificaciones y asistencia\n\n¿Deseas cargar estos datos en tu sistema ahora?`)) {
+          window.db.importBackup(parsed);
+          window.history.replaceState(null, '', window.location.pathname);
+          window.showToast('¡Datos compartidos cargados exitosamente!', 'success', 5000);
+        }
+      }, 300);
+    } catch (e) {
+      console.error('Error al procesar datos compartidos en URL:', e);
+    }
+  }
 
 })(typeof self !== 'undefined' ? self : this);

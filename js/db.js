@@ -1150,9 +1150,10 @@
 
     exportBackup() {
       return {
-        version: '1.2',
+        version: '1.4',
         timestamp: new Date().toISOString(),
         config: this.getConfig(),
+        courses: this.getCourses(),
         courseSubjects: this.getAllCourseSubjectsMap(),
         students: this.getStudents(),
         grades: this.getAllGrades(),
@@ -1163,10 +1164,12 @@
     importBackup(backupData) {
       if (!backupData) return false;
       if (backupData.config) localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify(backupData.config));
+      if (backupData.courses && Array.isArray(backupData.courses)) localStorage.setItem(DB_KEYS.COURSES, JSON.stringify(backupData.courses));
       if (backupData.courseSubjects) localStorage.setItem(DB_KEYS.COURSE_SUBJECTS, JSON.stringify(backupData.courseSubjects));
       if (backupData.students) localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(backupData.students));
       if (backupData.grades) localStorage.setItem(DB_KEYS.GRADES, JSON.stringify(backupData.grades));
       if (backupData.attendance) localStorage.setItem(DB_KEYS.ATTENDANCE, JSON.stringify(backupData.attendance));
+      localStorage.setItem(DB_KEYS.INITIALIZED, 'true');
       window.location.reload();
       return true;
     }
