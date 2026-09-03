@@ -278,7 +278,7 @@
 
         const docRef = this.firestore.collection('school_rooms').doc(this.roomCode);
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('No se pudo establecer conexión con el servidor de la nube (Tiempo de espera agotado).')), 3500)
+          setTimeout(() => reject(new Error('Tiempo de espera agotado al conectar con Firebase (10s).')), 10000)
         );
         await Promise.race([docRef.set(payload, { merge: true }), timeoutPromise]);
 
