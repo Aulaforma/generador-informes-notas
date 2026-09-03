@@ -584,6 +584,10 @@
       return [...list].sort((a, b) => (a.orden || 0) - (b.orden || 0));
     }
 
+    getCourseSubjects(nivel) {
+      return this.getSubjectsForCourse(nivel);
+    }
+
     generateDefaultSubjectsForLevel(nivel) {
       const clean = normalizeCourseString(nivel || '');
       let baseList = [];
@@ -792,6 +796,13 @@
       return students.find(s => s.id === id) || null;
     }
 
+    getStudentsByCourse(courseIdOrName) {
+      if (!courseIdOrName) return this.getStudents();
+      const course = this.getCourses().find(c => c.id === courseIdOrName || c.nombre === courseIdOrName);
+      const query = course ? (course.nombre || course.nivel) : courseIdOrName;
+      return this.getStudents(query);
+    }
+
     saveStudent(student) {
       const students = this.getStudents();
       let saved;
@@ -976,13 +987,19 @@
         promedio = roundToChileanGrade(rawAvg);
       }
 
+      const currentUser = window.authManager?.getCurrentUser();
+      const updatedBy = currentUser ? `${currentUser.nombre} (${currentUser.email})` : 'Sistema Local';
+      const updatedAt = new Date().toISOString();
+
       const record = {
         id: idx !== -1 ? allGrades[idx].id : 'grd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         studentId,
         subject,
         semestre: semNum,
         notes: notesArray,
-        promedio
+        promedio,
+        updatedBy,
+        updatedAt
       };
 
       if (idx !== -1) {
@@ -1133,13 +1150,19 @@
         porcentaje = Math.min(100, Math.round(((asist / trab) * 100 + Number.EPSILON) * 10) / 10);
       }
 
+      const currentUser = window.authManager?.getCurrentUser();
+      const updatedBy = currentUser ? `${currentUser.nombre} (${currentUser.email})` : 'Sistema Local';
+      const updatedAt = new Date().toISOString();
+
       const record = {
         id: idx !== -1 ? all[idx].id : 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         studentId,
         nivel,
         diasTrabajados: trab,
         diasAsistidos: asist,
-        porcentaje
+        porcentaje,
+        updatedBy,
+        updatedAt
       };
 
       if (idx !== -1) {

@@ -66,6 +66,8 @@
             window.attendanceView.render();
           } else if (targetViewId === 'students-view' && window.studentsView) {
             window.studentsView.render();
+          } else if (targetViewId === 'monitoring-view' && window.monitoringView) {
+            window.monitoringView.render();
           } else if (targetViewId === 'config-view' && window.configView) {
             window.configView.loadData();
             window.configView.renderProfesoresJefeTable();
@@ -91,6 +93,7 @@
     try { window.studentsView = new window.StudentsView(); } catch (e) { console.error('Error en StudentsView:', e); }
     try { window.gradesView = new window.GradesView(); } catch (e) { console.error('Error en GradesView:', e); }
     try { window.attendanceView = new window.AttendanceView(); } catch (e) { console.error('Error en AttendanceView:', e); }
+    try { window.monitoringView?.init(); } catch (e) { console.error('Error en MonitoringView:', e); }
     try { window.reportGenerator = new window.ReportGenerator(); } catch (e) { console.error('Error en ReportGenerator:', e); }
     try { window.pdfExporter = new window.PdfExporter(); } catch (e) { console.error('Error en PdfExporter:', e); }
 
@@ -291,10 +294,21 @@
       });
     }
 
-    // --- GESTIÓN DE ROLES (ADMINISTRADOR MAESTRO vs DOCENTE) ---
-    const btnRoleBadge = document.getElementById('btn-role-badge');
-    const roleBadgeIcon = document.getElementById('role-badge-icon');
-    const roleBadgeText = document.getElementById('role-badge-text');
+    // --- GESTIÓN DE AUTENTICACIÓN Y ROLES (ADMINISTRADOR vs DOCENTES) ---
+    const btnUserProfile = document.getElementById('btn-user-profile');
+    const userProfileIcon = document.getElementById('user-profile-icon');
+    const userProfileText = document.getElementById('user-profile-text');
+
+    const authModal = document.getElementById('auth-modal');
+    const authModalCloseBtn = document.getElementById('auth-modal-close-btn');
+    const authTabLogin = document.getElementById('auth-tab-login');
+    const authTabRegister = document.getElementById('auth-tab-register');
+    const authLoginContainer = document.getElementById('auth-login-container');
+    const authRegisterContainer = document.getElementById('auth-register-container');
+    const authLoginForm = document.getElementById('auth-login-form');
+    const authRegisterForm = document.getElementById('auth-register-form');
+    const btnSwitchAdminLogin = document.getElementById('btn-switch-admin-login');
+
     const masterAuthModal = document.getElementById('master-auth-modal');
     const masterAuthCloseBtn = document.getElementById('master-auth-close-btn');
     const masterAuthCancelBtn = document.getElementById('master-auth-cancel-btn');
@@ -302,26 +316,38 @@
     const btnSubmitMasterAuth = document.getElementById('btn-submit-master-auth');
     let pendingAdminAction = null;
 
-    const applyRoleUI = (role) => {
-      const isMaster = role === 'admin';
-      if (btnRoleBadge) {
-        if (isMaster) {
-          btnRoleBadge.style.background = '#eff6ff';
-          btnRoleBadge.style.borderColor = '#bfdbfe';
-          btnRoleBadge.style.color = '#1e40af';
-          if (roleBadgeIcon) roleBadgeIcon.textContent = '👑';
-          if (roleBadgeText) roleBadgeText.textContent = 'Modo Administrador';
+    const updateUserProfileUI = (user) => {
+      const isMaster = user && user.role === 'admin';
+      const tabMonitoring = document.getElementById('tab-btn-monitoring');
+      const tabConfig = document.getElementById('tab-btn-config');
+
+      if (btnUserProfile) {
+        if (!user) {
+          btnUserProfile.style.background = '#f8fafc';
+          btnUserProfile.style.borderColor = '#cbd5e1';
+          btnUserProfile.style.color = '#475569';
+          if (userProfileIcon) userProfileIcon.textContent = '👤';
+          if (userProfileText) userProfileText.textContent = 'Iniciar Sesión';
+        } else if (isMaster) {
+          btnUserProfile.style.background = '#eff6ff';
+          btnUserProfile.style.borderColor = '#bfdbfe';
+          btnUserProfile.style.color = '#1e40af';
+          if (userProfileIcon) userProfileIcon.textContent = '👑';
+          if (userProfileText) userProfileText.textContent = 'Administrador (Tú)';
         } else {
-          btnRoleBadge.style.background = '#f0fdf4';
-          btnRoleBadge.style.borderColor = '#bbf7d0';
-          btnRoleBadge.style.color = '#166534';
-          if (roleBadgeIcon) roleBadgeIcon.textContent = '👨‍🏫';
-          if (roleBadgeText) roleBadgeText.textContent = 'Modo Docente';
+          btnUserProfile.style.background = '#f0fdf4';
+          btnUserProfile.style.borderColor = '#bbf7d0';
+          btnUserProfile.style.color = '#166534';
+          if (userProfileIcon) userProfileIcon.textContent = '👨‍🏫';
+          const primerNombre = (user.nombre || 'Docente').split(' ')[0];
+          if (userProfileText) userProfileText.textContent = `Prof. ${primerNombre}`;
         }
       }
 
-      // Bloquear visualmente pestañas reservadas
-      const tabConfig = document.getElementById('tab-btn-config');
+      // Restricciones de navegación para docentes
+      if (tabMonitoring) {
+        tabMonitoring.style.display = isMaster ? 'flex' : 'none';
+      }
       if (tabConfig) {
         if (!isMaster) {
           tabConfig.style.opacity = '0.55';
@@ -333,9 +359,109 @@
       }
     };
 
-    window.addEventListener('role_changed', (e) => {
-      applyRoleUI(e.detail.role);
+    window.addEventListener('auth_state_changed', (e) => {
+      updateUserProfileUI(e.detail.user);
     });
+
+    const openAuthModal = (showRegister = false) => {
+      if (!authModal) return;
+      authModal.classList.add('active');
+      if (showRegister) {
+        switchToRegisterTab();
+      } else {
+        switchToLoginTab();
+      }
+    };
+
+    const closeAuthModal = () => {
+      if (authModal) authModal.classList.remove('active');
+    };
+
+    const switchToLoginTab = () => {
+      if (authTabLogin) {
+        authTabLogin.style.background = '#eff6ff';
+        authTabLogin.style.color = '#1e40af';
+        authTabLogin.style.borderColor = '#bfdbfe';
+      }
+      if (authTabRegister) {
+        authTabRegister.style.background = '#f8fafc';
+        authTabRegister.style.color = '#64748b';
+        authTabRegister.style.borderColor = '#e2e8f0';
+      }
+      if (authLoginContainer) authLoginContainer.style.display = 'block';
+      if (authRegisterContainer) authRegisterContainer.style.display = 'none';
+      const emailInp = document.getElementById('login-email-input');
+      if (emailInp) setTimeout(() => emailInp.focus(), 150);
+    };
+
+    const switchToRegisterTab = () => {
+      if (authTabRegister) {
+        authTabRegister.style.background = '#ecfdf5';
+        authTabRegister.style.color = '#047857';
+        authTabRegister.style.borderColor = '#a7f3d0';
+      }
+      if (authTabLogin) {
+        authTabLogin.style.background = '#f8fafc';
+        authTabLogin.style.color = '#64748b';
+        authTabLogin.style.borderColor = '#e2e8f0';
+      }
+      if (authLoginContainer) authLoginContainer.style.display = 'none';
+      if (authRegisterContainer) authRegisterContainer.style.display = 'block';
+      const nameInp = document.getElementById('register-name-input');
+      if (nameInp) setTimeout(() => nameInp.focus(), 150);
+    };
+
+    if (authTabLogin) authTabLogin.addEventListener('click', switchToLoginTab);
+    if (authTabRegister) authTabRegister.addEventListener('click', switchToRegisterTab);
+    if (authModalCloseBtn) authModalCloseBtn.addEventListener('click', closeAuthModal);
+    if (authModal) {
+      authModal.addEventListener('click', (e) => {
+        if (e.target === authModal) closeAuthModal();
+      });
+    }
+
+    if (authLoginForm) {
+      authLoginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email-input')?.value;
+        const password = document.getElementById('login-password-input')?.value;
+
+        try {
+          const user = window.authManager.loginTeacher(email, password);
+          closeAuthModal();
+          window.showToast(`✅ ¡Bienvenido(a) Prof. ${user.nombre}!`, 'success', 5000);
+          document.getElementById('tab-btn-grades')?.click();
+        } catch (err) {
+          window.showToast(err.message, 'danger');
+        }
+      });
+    }
+
+    if (authRegisterForm) {
+      authRegisterForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('register-name-input')?.value;
+        const email = document.getElementById('register-email-input')?.value;
+        const subject = document.getElementById('register-subject-input')?.value;
+        const password = document.getElementById('register-password-input')?.value;
+
+        try {
+          const user = window.authManager.registerTeacher(name, email, password, subject);
+          closeAuthModal();
+          window.showToast(`✅ ¡Cuenta de docente creada con éxito! Bienvenido(a) Prof. ${user.nombre}`, 'success', 5000);
+          document.getElementById('tab-btn-grades')?.click();
+        } catch (err) {
+          window.showToast(err.message, 'danger');
+        }
+      });
+    }
+
+    if (btnSwitchAdminLogin) {
+      btnSwitchAdminLogin.addEventListener('click', () => {
+        closeAuthModal();
+        openMasterAuthModal();
+      });
+    }
 
     const openMasterAuthModal = (callback = null) => {
       pendingAdminAction = callback;
@@ -363,15 +489,15 @@
     if (btnSubmitMasterAuth && authPinInput) {
       const verifyAndUnlock = () => {
         const pin = authPinInput.value.trim();
-        if (window.db?.verifyMasterPin(pin)) {
-          window.db.setCurrentRole('admin');
+        try {
+          window.authManager.loginAdmin(pin);
           closeMasterAuthModal();
           window.showToast('🔓 Modo Administrador activado con éxito. Control total habilitado.', 'success', 5000);
           if (typeof pendingAdminAction === 'function') {
             pendingAdminAction();
           }
-        } else {
-          window.showToast('Clave Maestra incorrecta. Inténtalo de nuevo.', 'danger');
+        } catch (err) {
+          window.showToast(err.message, 'danger');
           authPinInput.select();
         }
       };
@@ -382,15 +508,18 @@
       });
     }
 
-    if (btnRoleBadge) {
-      btnRoleBadge.addEventListener('click', () => {
-        if (window.db?.isMaster()) {
-          if (confirm('Actualmente estás en MODO ADMINISTRADOR (Control Total).\n\n¿Deseas cambiar a MODO DOCENTE para probar cómo lo verán tus profesores?')) {
-            window.db.setCurrentRole('docente');
-            window.showToast('👨‍🏫 Cambiado a Modo Docente. Funciones administrativas protegidas.', 'info', 4000);
+    if (btnUserProfile) {
+      btnUserProfile.addEventListener('click', () => {
+        const currentUser = window.authManager?.getCurrentUser();
+        if (currentUser) {
+          const rolText = currentUser.role === 'admin' ? 'Administrador Maestro' : 'Docente';
+          if (confirm(`Cuenta activa: ${currentUser.nombre}\nCorreo: ${currentUser.email}\nPerfil: ${rolText}\n\n¿Deseas cerrar tu sesión?`)) {
+            window.authManager.logout();
+            window.showToast('Sesión cerrada correctamente.', 'info');
+            openAuthModal();
           }
         } else {
-          openMasterAuthModal();
+          openAuthModal();
         }
       });
     }
@@ -399,7 +528,7 @@
     const tabConfigBtn = document.getElementById('tab-btn-config');
     if (tabConfigBtn) {
       tabConfigBtn.addEventListener('click', (e) => {
-        if (!window.db?.isMaster()) {
+        if (!window.authManager?.isAdmin()) {
           e.preventDefault();
           e.stopPropagation();
           openMasterAuthModal(() => {
@@ -412,7 +541,7 @@
     const clearStudentsBtn = document.getElementById('btn-clear-all-students');
     if (clearStudentsBtn) {
       clearStudentsBtn.addEventListener('click', (e) => {
-        if (!window.db?.isMaster()) {
+        if (!window.authManager?.isAdmin()) {
           e.preventDefault();
           e.stopPropagation();
           openMasterAuthModal();
@@ -423,7 +552,7 @@
     const resetDemoBtnRef = document.getElementById('btn-reset-demo');
     if (resetDemoBtnRef) {
       resetDemoBtnRef.addEventListener('click', (e) => {
-        if (!window.db?.isMaster()) {
+        if (!window.authManager?.isAdmin()) {
           e.preventDefault();
           e.stopPropagation();
           openMasterAuthModal();
@@ -431,8 +560,8 @@
       }, true);
     }
 
-    // Aplicar rol inicial
-    applyRoleUI(window.db?.getCurrentRole() || 'admin');
+    // Aplicar usuario y rol inicial
+    updateUserProfileUI(window.authManager?.getCurrentUser());
 
     // Soporte para arrastrar archivos .json de datos a cualquier parte de la ventana
     window.addEventListener('dragover', (e) => e.preventDefault());
@@ -691,20 +820,20 @@
       if (params.has('rol')) {
         const rolParam = params.get('rol').toLowerCase();
         if (rolParam === 'docente') {
-          window.db?.setCurrentRole('docente');
-          window.showToast('👨‍🏫 Acceso en Modo Docente. Selecciona tu curso y asignatura para ingresar notas.', 'info', 6000);
+          if (!window.authManager?.isTeacher()) {
+            setTimeout(() => {
+              openAuthModal(false);
+              window.showToast('👨‍🏫 Por favor inicia sesión o regístrate con tu correo para ingresar tus calificaciones.', 'info', 6000);
+            }, 500);
+          } else {
+            window.showToast(`👨‍🏫 Sesión activa como Prof. ${window.authManager.getCurrentUser().nombre}`, 'info', 5000);
+          }
         } else if (rolParam === 'admin') {
-          // Si entra con rol admin por URL, validar Clave Maestra
-          setTimeout(() => {
-            const pin = prompt('🔐 Ingrese su Clave Maestra de Administrador para acceder:');
-            if (window.db?.verifyMasterPin(pin)) {
-              window.db.setCurrentRole('admin');
-              window.showToast('👑 Bienvenido(a) al Modo Administrador. Control total activado.', 'success', 5000);
-            } else {
-              window.db?.setCurrentRole('docente');
-              window.showToast('Clave Maestra no ingresada. Modo Docente activado por seguridad.', 'warning', 5000);
-            }
-          }, 300);
+          if (!window.authManager?.isAdmin()) {
+            setTimeout(() => {
+              openMasterAuthModal();
+            }, 500);
+          }
         }
       }
 
