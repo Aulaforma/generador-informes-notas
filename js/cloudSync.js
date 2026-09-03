@@ -134,6 +134,14 @@
         }
 
         this.firestore = this.firebaseApp.firestore();
+        try {
+          this.firestore.settings({
+            experimentalForceLongPolling: true,
+            merge: true
+          });
+        } catch (settingErr) {
+          // Ignorar si ya se habían establecido las opciones
+        }
         this.roomCode = cleanRoom;
 
         // Guardar credenciales y sala para reconexión automática
