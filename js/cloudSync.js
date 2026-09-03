@@ -262,7 +262,10 @@
         };
 
         const docRef = this.firestore.collection('school_rooms').doc(this.roomCode);
-        await docRef.set(payload, { merge: true });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('No se pudo establecer conexión con el servidor de la nube (Tiempo de espera agotado).')), 3500)
+        );
+        await Promise.race([docRef.set(payload, { merge: true }), timeoutPromise]);
 
         const nowStr = new Date().toLocaleTimeString('es-CL');
         localStorage.setItem(CLOUD_STORAGE_KEYS.LAST_SYNC, nowStr);

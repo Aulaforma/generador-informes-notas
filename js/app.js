@@ -227,7 +227,7 @@
           window.showToast(`✅ ¡Tus ${studentCount} estudiantes y notas fueron subidos a la Sala! Ahora tus profesores verán toda la información al abrir el enlace.`, 'success', 6000);
         } catch (err) {
           console.warn('Subida a sala:', err);
-          window.showToast(`Datos procesados para la sala. También puedes enviar el archivo por WhatsApp usando "Descargar Respaldo Completo".`, 'info', 6000);
+          window.showToast('ℹ️ Para compartir tus datos de inmediato con tus profesores, usa el botón "💾 Descargar Respaldo Completo (.json)" y envíaselo por WhatsApp. Al importarlo tendrán toda tu nómina en 1 segundo.', 'warning', 9000);
         } finally {
           btnShareModalPushCloud.disabled = false;
           btnShareModalPushCloud.textContent = '☁️ Subir mis datos a la Sala ahora';
@@ -372,6 +372,7 @@
         switchToLoginTab();
       }
     };
+    window.openAuthModal = openAuthModal;
 
     const closeAuthModal = () => {
       if (authModal) authModal.classList.remove('active');
@@ -472,6 +473,7 @@
         setTimeout(() => authPinInput.focus(), 150);
       }
     };
+    window.openMasterAuthModal = openMasterAuthModal;
 
     const closeMasterAuthModal = () => {
       if (masterAuthModal) masterAuthModal.classList.remove('active');
@@ -822,17 +824,17 @@
         if (rolParam === 'docente') {
           if (!window.authManager?.isTeacher()) {
             setTimeout(() => {
-              openAuthModal(false);
-              window.showToast('👨‍🏫 Por favor inicia sesión o regístrate con tu correo para ingresar tus calificaciones.', 'info', 6000);
-            }, 500);
+              if (window.openAuthModal) window.openAuthModal(true);
+              window.showToast('👨‍🏫 Por favor regístrate o inicia sesión con tu correo para ingresar tus calificaciones.', 'info', 7000);
+            }, 400);
           } else {
             window.showToast(`👨‍🏫 Sesión activa como Prof. ${window.authManager.getCurrentUser().nombre}`, 'info', 5000);
           }
         } else if (rolParam === 'admin') {
           if (!window.authManager?.isAdmin()) {
             setTimeout(() => {
-              openMasterAuthModal();
-            }, 500);
+              if (window.openMasterAuthModal) window.openMasterAuthModal();
+            }, 400);
           }
         }
       }

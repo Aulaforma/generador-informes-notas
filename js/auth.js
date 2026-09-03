@@ -25,7 +25,22 @@
     initSession() {
       try {
         const raw = localStorage.getItem(AUTH_STORAGE_KEYS.CURRENT_SESSION);
-        if (raw) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isDocenteUrl = urlParams.get('rol') === 'docente';
+
+        if (isDocenteUrl) {
+          // Cuando un profesor abre el enlace docente, requiere su propia cuenta de profesor
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.role === 'teacher') {
+              this.currentUser = parsed;
+            } else {
+              this.currentUser = null;
+            }
+          } else {
+            this.currentUser = null;
+          }
+        } else if (raw) {
           this.currentUser = JSON.parse(raw);
         } else {
           // Por defecto en equipo local iniciamos como Administrador Maestro
