@@ -211,14 +211,7 @@
 
           if (!window.cloudSync?.isConnected()) {
             const room = window.cloudSync?.getRoomCode() || window.db?.getConfig()?.rbd || 'RBD-4580-1';
-            const fbConfig = window.cloudSync?.getSavedFirebaseConfig() || {
-              apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
-              authDomain: "generador-notas-colegio.firebaseapp.com",
-              projectId: "generador-notas-colegio",
-              storageBucket: "generador-notas-colegio.appspot.com",
-              messagingSenderId: "109847291029",
-              appId: "1:109847291029:web:38b819f8a0e2340b"
-            };
+            const fbConfig = window.cloudSync?.getSavedFirebaseConfig();
             await window.cloudSync.connect(fbConfig, room, true);
           } else {
             await window.cloudSync.pushLocalToCloud();
@@ -703,15 +696,7 @@
             return;
           }
         } else {
-          // Configuración predeterminada de Firebase
-          fbConfig = window.cloudSync?.getSavedFirebaseConfig() || {
-            apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
-            authDomain: "generador-notas-colegio.firebaseapp.com",
-            projectId: "generador-notas-colegio",
-            storageBucket: "generador-notas-colegio.appspot.com",
-            messagingSenderId: "109847291029",
-            appId: "1:109847291029:web:38b819f8a0e2340b"
-          };
+          fbConfig = window.cloudSync?.getSavedFirebaseConfig();
         }
 
         try {
@@ -843,14 +828,7 @@
       if (params.has('sala')) {
         const salaCode = params.get('sala').trim().toUpperCase();
         if (salaCode && window.cloudSync) {
-          const fbConfig = window.cloudSync.getSavedFirebaseConfig() || {
-            apiKey: "AIzaSyDOCAbC123_SchoolDefaultOpenKey994",
-            authDomain: "generador-notas-colegio.firebaseapp.com",
-            projectId: "generador-notas-colegio",
-            storageBucket: "generador-notas-colegio.appspot.com",
-            messagingSenderId: "109847291029",
-            appId: "1:109847291029:web:38b819f8a0e2340b"
-          };
+          const fbConfig = window.cloudSync.getSavedFirebaseConfig();
           window.cloudSync.connect(fbConfig, salaCode, false)
             .then(() => {
               window.showToast(`☁️ Conectado a la Sala de Colegio: ${salaCode}`, 'success', 5000);

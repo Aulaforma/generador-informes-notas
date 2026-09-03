@@ -20,6 +20,15 @@
     LAST_SYNC: 'ga_cloud_last_sync'
   };
 
+  const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAvySbZy42kqtZrXc_f58csHio1n7G6xLk",
+    authDomain: "liceo-alcazar.firebaseapp.com",
+    projectId: "liceo-alcazar",
+    storageBucket: "liceo-alcazar.firebasestorage.app",
+    messagingSenderId: "707408760273",
+    appId: "1:707408760273:web:fb0c77570638613a2724f0"
+  };
+
   class CloudSyncManager {
     constructor() {
       this.firebaseApp = null;
@@ -27,7 +36,7 @@
       this.unsubscribeSnapshot = null;
       this.isSyncing = false;
       this.isApplyingRemote = false;
-      this.roomCode = localStorage.getItem(CLOUD_STORAGE_KEYS.ROOM_CODE) || '';
+      this.roomCode = localStorage.getItem(CLOUD_STORAGE_KEYS.ROOM_CODE) || 'RBD-4580-1';
       this.autoSync = localStorage.getItem(CLOUD_STORAGE_KEYS.AUTO_SYNC) !== 'false';
       this.debounceTimer = null;
       this.statusListeners = [];
@@ -47,9 +56,15 @@
     getSavedFirebaseConfig() {
       try {
         const raw = localStorage.getItem(CLOUD_STORAGE_KEYS.FIREBASE_CONFIG);
-        return raw ? JSON.parse(raw) : null;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.projectId && parsed.projectId !== 'generador-notas-colegio') {
+            return parsed;
+          }
+        }
+        return DEFAULT_FIREBASE_CONFIG;
       } catch (e) {
-        return null;
+        return DEFAULT_FIREBASE_CONFIG;
       }
     }
 
