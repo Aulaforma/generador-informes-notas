@@ -137,7 +137,7 @@
         try {
           this.firestore.settings({
             experimentalForceLongPolling: true,
-            merge: true
+            ignoreUndefinedProperties: true
           });
         } catch (settingErr) {
           // Ignorar si ya se habían establecido las opciones
@@ -277,11 +277,12 @@
         if (!db) return false;
 
         const backup = db.exportBackup();
+        const cleanBackup = JSON.parse(JSON.stringify(backup));
         const payload = {
-          ...backup,
+          ...cleanBackup,
           updatedAt: window.firebase.firestore.FieldValue.serverTimestamp(),
           updatedBy: this.getClientId(),
-          schoolName: backup.config?.nombre || 'Establecimiento'
+          schoolName: cleanBackup.config?.nombre || 'Establecimiento'
         };
 
         const docRef = this.firestore.collection('school_rooms').doc(this.roomCode);
