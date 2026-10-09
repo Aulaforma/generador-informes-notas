@@ -8,6 +8,7 @@ import { InstitutionalInfo, NavSection, DbDocente } from "@/types/dashboard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { DocenteModal } from "./DocenteModal";
+import { CrearAccesoModal } from "./CrearAccesoModal";
 
 interface DocentesClientProps {
   institution: InstitutionalInfo;
@@ -29,9 +30,14 @@ export function DocentesClient({ institution }: DocentesClientProps) {
   // Filtro de búsqueda
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Modal
+  // Modal de edición/creación de ficha
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [docenteToEdit, setDocenteToEdit] = useState<DbDocente | null>(null);
+
+  // Modal de creación de acceso institucional
+  const [isAccesoModalOpen, setIsAccesoModalOpen] = useState<boolean>(false);
+  const [docenteParaAcceso, setDocenteParaAcceso] = useState<DbDocente | null>(null);
+  const [docenteIdsConAcceso, setDocenteIdsConAcceso] = useState<Set<number>>(new Set());
 
   const fetchDocentes = useCallback(async () => {
     if (!isUtp) return;
@@ -52,6 +58,29 @@ export function DocentesClient({ institution }: DocentesClientProps) {
       }
 
       setDocentes((data as DbDocente[]) || []);
+
+      // Consultar qué docentes ya cuentan con un acceso activo en el sistema
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.access_token) {
+          const res = await fetch("/api/admin/docentes/crear-acceso", {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          if (res.ok) {
+            const accData = await res.json();
+            if (accData.success && Array.isArray(accData.docenteIdsConAcceso)) {
+              setDocenteIdsConAcceso(new Set(accData.docenteIdsConAcceso));
+            }
+          }
+        }
+      } catch (accErr) {
+        console.error("Error al consultar accesos existentes de docentes:", accErr);
+      }
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof Error ? err.message : "Error inesperado al conectar con Supabase."
@@ -70,7 +99,6 @@ export function DocentesClient({ institution }: DocentesClientProps) {
     }
   }, [authLoading, isUtp, fetchDocentes]);
 
-  // Handlers para el modal
   const handleOpenCreate = () => {
     setDocenteToEdit(null);
     setIsModalOpen(true);
@@ -79,6 +107,16 @@ export function DocentesClient({ institution }: DocentesClientProps) {
   const handleOpenEdit = (docente: DbDocente) => {
     setDocenteToEdit(docente);
     setIsModalOpen(true);
+  };
+
+  const handleOpenCrearAcceso = (docente: DbDocente) => {
+    setDocenteParaAcceso(docente);
+    setIsAccesoModalOpen(true);
+  };
+
+  const handleAccesoSuccess = (docenteId: number) => {
+    setDocenteIdsConAcceso((prev) => new Set([...prev, docenteId]));
+    setActiveNotice("Acceso institucional creado exitosamente para el docente.");
   };
 
   const handleSuccess = (msg: string) => {
@@ -431,17 +469,41 @@ export function DocentesClient({ institution }: DocentesClientProps) {
 
                             {/* Columna Acciones */}
                             <td className="px-6 py-3.5 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(docente)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer"
-                                title="Editar datos del docente"
-                              >
-                                <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                <span>Editar</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                {docenteIdsConAcceso.has(docente.id) ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-900 border border-blue-200">
+                                    <svg className="w-3.5 h-3.5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                    <span>Acceso habilitado</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenCrearAcceso(docente)}
+                                    disabled={!docente.email?.trim()}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 text-white text-xs font-semibold shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer disabled:cursor-not-allowed border border-transparent disabled:border"
+                                    title={docente.email?.trim() ? "Generar credenciales de acceso institucional" : "Debe registrar un correo antes de crear acceso"}
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                    <span>Crear acceso</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(docente)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer"
+                                  title="Editar datos del docente"
+                                >
+                                  <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                  <span>Editar</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -461,6 +523,17 @@ export function DocentesClient({ institution }: DocentesClientProps) {
           onClose={() => setIsModalOpen(false)}
           onSuccess={handleSuccess}
           onError={handleError}
+        />
+
+        {/* Modal para Crear Acceso Institucional de Docente */}
+        <CrearAccesoModal
+          isOpen={isAccesoModalOpen}
+          docente={docenteParaAcceso}
+          onClose={() => {
+            setIsAccesoModalOpen(false);
+            setDocenteParaAcceso(null);
+          }}
+          onSuccess={handleAccesoSuccess}
         />
 
         {/* Footer */}
