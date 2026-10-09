@@ -19,8 +19,9 @@ interface AuthContextType {
   login: (
     email: string,
     password: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; debeCambiarPassword?: boolean }>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Consultar la tabla perfiles para el usuario autenticado
         const { data: perfilData, error: perfilError } = await supabase
           .from("perfiles")
-          .select("id, nombre, rol, docente_id, activo")
+          .select("id, nombre, rol, docente_id, activo, debe_cambiar_password")
           .eq("id", session.user.id)
           .maybeSingle();
 
@@ -114,7 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       email: string,
       password: string
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{
+      success: boolean;
+      error?: string;
+      debeCambiarPassword?: boolean;
+    }> => {
       try {
         // 1. Iniciar sesión exclusivamente mediante Supabase Auth
         const { data: authData, error: authError } =
@@ -146,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 2. Consultar la tabla perfiles utilizando el ID del usuario autenticado
         const { data: perfilData, error: perfilError } = await supabase
           .from("perfiles")
-          .select("id, nombre, rol, docente_id, activo")
+          .select("id, nombre, rol, docente_id, activo, debe_cambiar_password")
           .eq("id", authUser.id)
           .maybeSingle();
 
@@ -189,7 +194,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 4. Autenticación y verificación exitosas
         setUser(authUser);
         setProfile(perfilData as DbPerfil);
-        return { success: true };
+        return {
+          success: true,
+          debeCambiarPassword: Boolean(perfilData.debe_cambiar_password),
+        };
       } catch (err: unknown) {
         const message =
           err instanceof Error
@@ -213,6 +221,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Función para refrescar el perfil institucional del usuario autenticado
+  const refreshProfile = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        setUser(null);
+        setProfile(null);
+        return;
+      }
+
+      const { data: perfilData, error: perfilError } = await supabase
+        .from("perfiles")
+        .select("id, nombre, rol, docente_id, activo, debe_cambiar_password")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (!perfilError && perfilData) {
+        setProfile(perfilData as DbPerfil);
+      }
+    } catch (err) {
+      console.error("Error al refrescar perfil en Supabase:", err);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -221,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         logout,
+        refreshProfile,
       }}
     >
       {children}

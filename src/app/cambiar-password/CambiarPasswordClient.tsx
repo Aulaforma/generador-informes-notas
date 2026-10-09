@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 export function CambiarPasswordClient() {
   const router = useRouter();
+  const { logout, refreshProfile } = useAuth();
 
   const [nuevaPassword, setNuevaPassword] = useState("");
   const [confirmarPassword, setConfirmarPassword] = useState("");
@@ -104,6 +105,9 @@ export function CambiarPasswordClient() {
         setIsSubmitting(false);
         return;
       }
+
+      // Sincronizar el estado del perfil en AuthContext
+      await refreshProfile();
 
       // 5. Mostrar confirmación exitosa
       setSuccessMessage("Contraseña actualizada correctamente.");
@@ -393,14 +397,16 @@ export function CambiarPasswordClient() {
             </div>
           </form>
 
-          {/* Enlace opcional para volver al panel mientras la redirección forzada no esté activa */}
+          {/* Botón de cierre de sesión institucional */}
           <div className="pt-2 text-center">
-            <Link
-              href="/"
-              className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline-offset-4 hover:underline"
+            <button
+              type="button"
+              onClick={() => logout()}
+              disabled={isSubmitting}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline-offset-4 hover:underline cursor-pointer disabled:opacity-50"
             >
-              Volver al panel principal
-            </Link>
+              Cerrar sesión
+            </button>
           </div>
         </div>
 

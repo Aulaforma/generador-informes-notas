@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 export function LoginView() {
+  const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,6 +29,8 @@ export function LoginView() {
         setErrorMessage(
           result.error || "Error al iniciar sesión. Verifique sus credenciales."
         );
+      } else if (result.debeCambiarPassword) {
+        router.push("/cambiar-password");
       }
     } catch {
       setErrorMessage("Ocurrió un error inesperado al conectar con el servidor.");
