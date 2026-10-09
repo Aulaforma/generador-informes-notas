@@ -11,6 +11,7 @@ interface TeacherAssignmentModalProps {
   currentDocenteId: number | null;
   targetId: number;
   targetTitle?: string;
+  currentIncidePromedio?: boolean;
   onClose: () => void;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
@@ -23,20 +24,23 @@ export function TeacherAssignmentModal({
   currentDocenteId,
   targetId,
   targetTitle,
+  currentIncidePromedio,
   onClose,
   onSuccess,
   onError,
 }: TeacherAssignmentModalProps) {
   const isProfJefe = mode === "profesor_jefe";
   const [selectedDocenteId, setSelectedDocenteId] = useState<string>("");
+  const [incidePromedio, setIncidePromedio] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
       setSelectedDocenteId(currentDocenteId !== null && currentDocenteId !== undefined ? currentDocenteId.toString() : "");
+      setIncidePromedio(currentIncidePromedio !== false);
       setIsSubmitting(false);
     }
-  }, [isOpen, currentDocenteId]);
+  }, [isOpen, currentDocenteId, currentIncidePromedio]);
 
   if (!isOpen) return null;
 
@@ -67,14 +71,17 @@ export function TeacherAssignmentModal({
         onSuccess(`Profesor(a) Jefe actualizado correctamente a: ${nameText}.`);
         onClose();
       } else {
-        // Actualizar docente_id en curso_asignaturas
+        // Actualizar docente_id e incide_promedio en curso_asignaturas
         const { error } = await supabase
           .from("curso_asignaturas")
-          .update({ docente_id: docIdOrNull })
+          .update({
+            docente_id: docIdOrNull,
+            incide_promedio: incidePromedio,
+          })
           .eq("id", targetId);
 
         if (error) {
-          onError(`Error al asignar docente a la asignatura: ${error.message}`);
+          onError(`Error al actualizar asignatura: ${error.message}`);
           setIsSubmitting(false);
           return;
         }
@@ -85,8 +92,8 @@ export function TeacherAssignmentModal({
           : "Sin asignar";
         onSuccess(
           targetTitle
-            ? `Docente para "${targetTitle}" asignado a: ${nameText}.`
-            : `Docente asignado correctamente a: ${nameText}.`
+            ? `Configuración de "${targetTitle}" guardada correctamente (Docente: ${nameText}, Incide en promedio: ${incidePromedio ? "Sí" : "No"}).`
+            : `Asignatura actualizada correctamente.`
         );
         onClose();
       }
@@ -162,6 +169,41 @@ export function TeacherAssignmentModal({
                 : "El docente seleccionado tendrá atribuciones para registrar calificaciones en esta asignatura."}
             </span>
           </div>
+
+          {!isProfJefe && (
+            <div className="pt-3 border-t border-slate-100">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                Incide en el promedio general
+              </label>
+              <div className="flex items-center gap-5 pt-0.5">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                  <input
+                    type="radio"
+                    name="edit_incide_promedio"
+                    checked={incidePromedio}
+                    onChange={() => setIncidePromedio(true)}
+                    disabled={isSubmitting}
+                    className="text-blue-900 focus:ring-blue-900 h-4 w-4"
+                  />
+                  <span>Sí</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                  <input
+                    type="radio"
+                    name="edit_incide_promedio"
+                    checked={!incidePromedio}
+                    onChange={() => setIncidePromedio(false)}
+                    disabled={isSubmitting}
+                    className="text-blue-900 focus:ring-blue-900 h-4 w-4"
+                  />
+                  <span>No (ej. Religión)</span>
+                </label>
+              </div>
+              <span className="text-[11px] text-slate-400 mt-1.5 block">
+                Si se desmarca, la asignatura mantendrá sus notas y su promedio propio, pero no sumará ni dividirá en el promedio general del estudiante.
+              </span>
+            </div>
+          )}
 
           {/* Botones de acción */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">

@@ -64,9 +64,23 @@ export function PeriodoModal({
     setValidationError(null);
 
     try {
+      // Regla de Ciclo de Vida Seguro (ETAPA 17D):
+      // - Si se activa -> activo = true, cerrado = false
+      // - Si se cierra -> activo = false, cerrado = true
+      // - Si se reabre -> activo = false, cerrado = false
+      let finalActivo = activo;
+      let finalCerrado = cerrado;
+      if (activo) {
+        finalActivo = true;
+        finalCerrado = false;
+      } else if (cerrado) {
+        finalActivo = false;
+        finalCerrado = true;
+      }
+
       // Regla A: Solo un período activo por año
       // Si se activa este período, primero desactivar los otros del mismo año
-      if (activo) {
+      if (finalActivo) {
         const { error: deactivateError } = await supabase
           .from("periodos")
           .update({ activo: false })
@@ -79,15 +93,15 @@ export function PeriodoModal({
         }
       }
 
-      // Actualizar el período seleccionado
+      // Actualizar el período seleccionado con estados coherentes
       const { error: updateError } = await supabase
         .from("periodos")
         .update({
           nombre: cleanNombre,
           fecha_inicio: fechaInicio || null,
           fecha_fin: fechaFin || null,
-          activo: activo,
-          cerrado: cerrado,
+          activo: finalActivo,
+          cerrado: finalCerrado,
         })
         .eq("id", periodoToEdit.id);
 
@@ -255,7 +269,13 @@ export function PeriodoModal({
                 <input
                   type="checkbox"
                   checked={activo}
-                  onChange={(e) => setActivo(e.target.checked)}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    setActivo(nextVal);
+                    if (nextVal) {
+                      setCerrado(false); // Al activar, debe quedar abierto para notas
+                    }
+                  }}
                   disabled={isSubmitting}
                   className="sr-only peer"
                 />
@@ -264,7 +284,7 @@ export function PeriodoModal({
             </div>
             {activo && !periodoToEdit.activo && (
               <p className="text-[11px] text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                Al activar este período, los demás períodos del año {periodoToEdit.anio} pasarán automáticamente a no activos.
+                Al activar este período, los demás períodos del año {periodoToEdit.anio} pasarán automáticamente a no activos y este período quedará abierto para notas.
               </p>
             )}
           </div>
@@ -284,7 +304,13 @@ export function PeriodoModal({
                 <input
                   type="checkbox"
                   checked={cerrado}
-                  onChange={(e) => setCerrado(e.target.checked)}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    setCerrado(nextVal);
+                    if (nextVal) {
+                      setActivo(false); // Un período cerrado no debe ser activo
+                    }
+                  }}
                   disabled={isSubmitting}
                   className="sr-only peer"
                 />

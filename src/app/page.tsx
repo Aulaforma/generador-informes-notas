@@ -91,19 +91,49 @@ export default function HomePage() {
     fetchCursos();
   }, [fetchCursos]);
 
-  // 2. Si es docente, obtener los curso_id asignados desde curso_asignaturas
+  // 2. Si es docente, obtener los cursos asignados (asignaturas impartidas + profesor jefe)
   useEffect(() => {
     const fetchTeacherCourses = async () => {
       if (profile?.rol === "docente" && profile.docente_id) {
-        const { data, error } = await supabase
-          .from("curso_asignaturas")
-          .select("curso_id")
-          .eq("docente_id", profile.docente_id);
+        try {
+          const courseIds = new Set<number>();
 
-        if (!error && data) {
-          const ids = Array.from(new Set(data.map((r) => r.curso_id)));
-          setTeacherCourseIds(ids);
-        } else {
+          // A) Cursos donde imparte al menos una asignatura
+          const { data: caData, error: caError } = await supabase
+            .from("curso_asignaturas")
+            .select("curso_id")
+            .eq("docente_id", profile.docente_id);
+
+          if (caError) {
+            console.error("Error al consultar curso_asignaturas para docente:", caError);
+          } else if (caData) {
+            caData.forEach((row) => {
+              if (row.curso_id) {
+                courseIds.add(row.curso_id);
+              }
+            });
+          }
+
+          // B) Cursos donde está asignado como profesor jefe
+          const { data: pjData, error: pjError } = await supabase
+            .from("cursos")
+            .select("id")
+            .eq("profesor_jefe_id", profile.docente_id)
+            .eq("activo", true);
+
+          if (pjError) {
+            console.error("Error al consultar cursos de jefatura para docente:", pjError);
+          } else if (pjData) {
+            pjData.forEach((row) => {
+              if (row.id) {
+                courseIds.add(row.id);
+              }
+            });
+          }
+
+          setTeacherCourseIds(Array.from(courseIds));
+        } catch (err) {
+          console.error("Error inesperado al obtener cursos del docente:", err);
           setTeacherCourseIds([]);
         }
       } else {

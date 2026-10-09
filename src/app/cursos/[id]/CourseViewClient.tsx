@@ -20,6 +20,7 @@ import { StudentAdminModal } from "./StudentAdminModal";
 import { TeacherAssignmentModal } from "./TeacherAssignmentModal";
 import { CursoModal } from "@/app/CursoModal";
 import { AddSubjectToCourseModal } from "./AddSubjectToCourseModal";
+import { SigeImportModal } from "./SigeImportModal";
 
 interface CourseViewClientProps {
   courseId?: string;
@@ -95,6 +96,7 @@ export function CourseViewClient({
   // Estados para modal de administración de estudiantes (rol UTP)
   const [isStudentModalOpen, setIsStudentModalOpen] = useState<boolean>(false);
   const [studentToEdit, setStudentToEdit] = useState<DbStudent | null>(null);
+  const [isSigeImportModalOpen, setIsSigeImportModalOpen] = useState<boolean>(false);
 
   // Estados para la lista de docentes activos y modal de asignaciones (rol UTP)
   const [activeDocentes, setActiveDocentes] = useState<DbDocente[]>([]);
@@ -103,6 +105,7 @@ export function CourseViewClient({
   const [teacherModalCurrentDocId, setTeacherModalCurrentDocId] = useState<number | null>(null);
   const [teacherModalTargetId, setTeacherModalTargetId] = useState<number>(0);
   const [teacherModalTargetTitle, setTeacherModalTargetTitle] = useState<string>("");
+  const [teacherModalCurrentIncidePromedio, setTeacherModalCurrentIncidePromedio] = useState<boolean>(true);
 
   // Handlers para administración de estudiantes
   const handleOpenCreateStudent = () => {
@@ -117,7 +120,7 @@ export function CourseViewClient({
 
   const handleStudentSuccess = (message: string) => {
     setActiveNotice(message);
-    fetchStudentsFromSupabase();
+    fetchStudentsFromSupabase(resolvedCursoId);
   };
 
   const handleStudentError = (message: string) => {
@@ -130,6 +133,7 @@ export function CourseViewClient({
     setTeacherModalCurrentDocId(profesorJefeId);
     setTeacherModalTargetId(resolvedCursoId);
     setTeacherModalTargetTitle(courseName);
+    setTeacherModalCurrentIncidePromedio(true);
     setIsTeacherModalOpen(true);
   };
 
@@ -138,6 +142,7 @@ export function CourseViewClient({
     setTeacherModalCurrentDocId(item.docente_id ?? null);
     setTeacherModalTargetId(item.id);
     setTeacherModalTargetTitle(item.asignaturas.nombre);
+    setTeacherModalCurrentIncidePromedio(item.incide_promedio !== false);
     setIsTeacherModalOpen(true);
   };
 
@@ -183,35 +188,47 @@ export function CourseViewClient({
     profile?.docente_id === profesorJefeId;
   const canViewConsolidated = isUtp || isProfesorJefe;
 
-  // Función para consultar estudiantes desde Supabase
-  const fetchStudentsFromSupabase = useCallback(async () => {
-    setIsLoadingStudents(true);
-    setStudentsError(null);
+  // Función para consultar estudiantes del curso desde Supabase (Etapa 18B)
+  const fetchStudentsFromSupabase = useCallback(
+    async (targetCursoId?: number) => {
+      const cursoId = targetCursoId ?? resolvedCursoId;
 
-    try {
-      const { data, error } = await supabase
-        .from("estudiantes")
-        .select("id, numero_lista, nombres, apellidos, curso_id, activo")
-        .order("numero_lista", { ascending: true });
-
-      if (error) {
-        setStudentsError(`Error de Supabase: ${error.message}`);
+      if (!cursoId || cursoId <= 0) {
         setStudents([]);
+        setIsLoadingStudents(false);
         return;
       }
 
-      setStudents((data as DbStudent[]) || []);
-    } catch (err: unknown) {
-      setStudentsError(
-        err instanceof Error
-          ? `Error al conectar con la base de datos: ${err.message}`
-          : "Error inesperado al conectar con Supabase."
-      );
-      setStudents([]);
-    } finally {
-      setIsLoadingStudents(false);
-    }
-  }, []);
+      setIsLoadingStudents(true);
+      setStudentsError(null);
+
+      try {
+        const { data, error } = await supabase
+          .from("estudiantes")
+          .select("id, numero_lista, nombres, apellidos, curso_id, activo, run, dv")
+          .eq("curso_id", cursoId)
+          .order("numero_lista", { ascending: true });
+
+        if (error) {
+          setStudentsError(`Error de Supabase: ${error.message}`);
+          setStudents([]);
+          return;
+        }
+
+        setStudents((data as DbStudent[]) || []);
+      } catch (err: unknown) {
+        setStudentsError(
+          err instanceof Error
+            ? `Error al conectar con la base de datos: ${err.message}`
+            : "Error inesperado al conectar con Supabase."
+        );
+        setStudents([]);
+      } finally {
+        setIsLoadingStudents(false);
+      }
+    },
+    [resolvedCursoId]
+  );
 
   // Función para consultar curso, profesor jefe y asignaturas vinculadas desde Supabase
   const fetchSubjectsFromSupabase = useCallback(async () => {
@@ -262,6 +279,9 @@ export function CourseViewClient({
         setCursoAsignaturas([]);
         setHeadTeacher("Sin asignar");
         setProfesorJefeId(null);
+        setResolvedCursoId(0);
+        setStudents([]);
+        setIsLoadingStudents(false);
         return;
       }
 
@@ -271,6 +291,9 @@ export function CourseViewClient({
         setCursoAsignaturas([]);
         setHeadTeacher("Sin asignar");
         setProfesorJefeId(null);
+        setResolvedCursoId(0);
+        setStudents([]);
+        setIsLoadingStudents(false);
         return;
       }
 
@@ -309,7 +332,7 @@ export function CourseViewClient({
       const { data, error } = await supabase
         .from("curso_asignaturas")
         .select(
-          "id, curso_id, asignatura_id, docente_id, asignaturas(id, nombre, activo), docentes(id, nombres, apellidos, email, activo)"
+          "id, curso_id, asignatura_id, docente_id, incide_promedio, asignaturas(id, nombre, activo), docentes(id, nombres, apellidos, email, activo)"
         )
         .eq("curso_id", cursoIdNum)
         .order("asignatura_id", { ascending: true });
@@ -380,14 +403,34 @@ export function CourseViewClient({
     }
   }, []);
 
+  // Limpiar nómina anterior y sincronizar ID numérico al cambiar de curso (Etapa 18B - Requisito 5)
+  useEffect(() => {
+    setStudents([]);
+    setIsLoadingStudents(true);
+    const newNumeric = Number(courseId || course?.id);
+    if (!isNaN(newNumeric) && newNumeric > 0) {
+      setResolvedCursoId(newNumeric);
+    }
+  }, [courseId, course?.id]);
+
+  // Carga inicial de datos del curso, docentes y catálogo
   useEffect(() => {
     if (!authLoading) {
-      fetchStudentsFromSupabase();
       fetchSubjectsFromSupabase();
       fetchActiveDocentes();
       fetchCatalogAsignaturas();
     }
-  }, [authLoading, fetchStudentsFromSupabase, fetchSubjectsFromSupabase, fetchActiveDocentes, fetchCatalogAsignaturas]);
+  }, [authLoading, fetchSubjectsFromSupabase, fetchActiveDocentes, fetchCatalogAsignaturas]);
+
+  // Carga y sincronización de estudiantes por curso resuelto (Etapa 18B)
+  useEffect(() => {
+    if (!authLoading && resolvedCursoId > 0) {
+      fetchStudentsFromSupabase(resolvedCursoId);
+    } else if (!authLoading && resolvedCursoId === 0 && courseNotFound) {
+      setStudents([]);
+      setIsLoadingStudents(false);
+    }
+  }, [authLoading, resolvedCursoId, fetchStudentsFromSupabase, courseNotFound]);
 
   // Vista institucional de carga mientras se valida la sesión o el curso
   if (authLoading || isLoadingSubjects) {
@@ -789,9 +832,11 @@ export function CourseViewClient({
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-1.5 mb-2">
-                              <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700">
-                                Asignatura troncal
-                              </span>
+                              {item.incide_promedio === false && (
+                                <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                  No incide en promedio general
+                                </span>
+                              )}
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
                                 ID #{subjectId}
                               </span>
@@ -875,22 +920,50 @@ export function CourseViewClient({
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                  Estudiantes matriculados oficialmente en 7° Básico A (Año 2026).
+                  Estudiantes matriculados oficialmente en {courseName} (Año {courseAnio}).
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                {isUtp && (
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateStudent}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold tracking-wide transition-colors shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 cursor-pointer"
+                {canViewConsolidated && (
+                  <Link
+                    href={`/cursos/${courseId || course?.id || resolvedCursoId}/libretas`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-900 bg-white hover:bg-blue-50 text-blue-900 text-xs font-bold shadow-2xs transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
+                    <svg className="w-3.5 h-3.5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                      />
                     </svg>
-                    <span>+ Nuevo estudiante</span>
-                  </button>
+                    <span>Imprimir libretas del curso</span>
+                  </Link>
+                )}
+                {isUtp && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsSigeImportModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-900 bg-white hover:bg-blue-50 text-blue-900 text-xs font-semibold tracking-wide transition-colors shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5 text-blue-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span>Importar desde SIGE</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateStudent}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold tracking-wide transition-colors shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>+ Nuevo estudiante</span>
+                    </button>
+                  </>
                 )}
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -935,7 +1008,7 @@ export function CourseViewClient({
                 </p>
                 <button
                   type="button"
-                  onClick={fetchStudentsFromSupabase}
+                  onClick={() => fetchStudentsFromSupabase(resolvedCursoId)}
                   className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold bg-rose-700 hover:bg-rose-800 text-white rounded-lg shadow-xs transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1102,6 +1175,7 @@ export function CourseViewClient({
         currentDocenteId={teacherModalCurrentDocId}
         targetId={teacherModalTargetId}
         targetTitle={teacherModalTargetTitle}
+        currentIncidePromedio={teacherModalCurrentIncidePromedio}
         onClose={() => setIsTeacherModalOpen(false)}
         onSuccess={handleTeacherSuccess}
         onError={handleTeacherError}
@@ -1137,6 +1211,25 @@ export function CourseViewClient({
         onClose={() => setIsAddSubjectModalOpen(false)}
         onSuccess={handleAddSubjectSuccess}
         onError={handleAddSubjectError}
+      />
+
+      {/* Modal administrativo para Importar Nómina desde SIGE (UTP) */}
+      <SigeImportModal
+        isOpen={isSigeImportModalOpen}
+        onClose={() => setIsSigeImportModalOpen(false)}
+        cursoId={resolvedCursoId}
+        cursoNombre={courseName}
+        cursoNivel={courseNivel}
+        cursoLetra={courseLetra}
+        cursoAnio={courseAnio}
+        existingStudents={students}
+        onSuccess={(msg) => {
+          setActiveNotice(msg);
+          fetchStudentsFromSupabase(resolvedCursoId);
+        }}
+        onError={(msg) => {
+          setActiveNotice(`Error: ${msg}`);
+        }}
       />
     </div>
   );

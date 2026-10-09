@@ -37,6 +37,9 @@ export interface DbStudent {
   apellidos: string;
   curso_id: number;
   activo: boolean;
+  run?: number | null;
+  dv?: string | null;
+  created_at?: string;
 }
 
 export interface DbAsignatura {
@@ -58,6 +61,7 @@ export interface DbCursoAsignatura {
   curso_id: number;
   asignatura_id: number;
   docente_id?: number | null;
+  incide_promedio?: boolean;
   asignaturas: DbAsignatura;
   docentes?: DbDocente | null;
 }
@@ -90,6 +94,18 @@ export interface DbCalificacion {
   nota: number | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface DbCalificacionAuditoria {
+  id: number;
+  calificacion_id: number;
+  estudiante_id: number;
+  evaluacion_id: number;
+  nota_anterior: number | null;
+  nota_nueva: number | null;
+  accion: "INSERT" | "UPDATE" | "CLEAR" | "DELETE" | string;
+  usuario_id: string | null;
+  created_at: string;
 }
 
 export interface DbPeriodo {
@@ -142,5 +158,7 @@ export interface DbPerfil {
   rol: string;
   docente_id: number | null;
   activo: boolean;
+  debe_cambiar_password?: boolean;
 }
+
 

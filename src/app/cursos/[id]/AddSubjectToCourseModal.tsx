@@ -25,6 +25,7 @@ export function AddSubjectToCourseModal({
 }: AddSubjectToCourseModalProps) {
   const [selectedAsignaturaId, setSelectedAsignaturaId] = useState<string>("");
   const [selectedDocenteId, setSelectedDocenteId] = useState<string>("");
+  const [incidePromedio, setIncidePromedio] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -32,6 +33,7 @@ export function AddSubjectToCourseModal({
     if (isOpen) {
       setSelectedAsignaturaId("");
       setSelectedDocenteId("");
+      setIncidePromedio(true);
       setIsSubmitting(false);
       setValidationError(null);
     }
@@ -69,6 +71,7 @@ export function AddSubjectToCourseModal({
           curso_id: courseId,
           asignatura_id: asigId,
           docente_id: docId || null,
+          incide_promedio: incidePromedio,
         });
 
       if (error) {
@@ -214,6 +217,40 @@ export function AddSubjectToCourseModal({
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Puedes dejarla sin asignar y asignarla más adelante desde la tarjeta de la materia.
+                </p>
+              </div>
+
+              {/* Campo: Incide en el promedio general */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Incide en el promedio general
+                </label>
+                <div className="flex items-center gap-5 pt-1">
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                    <input
+                      type="radio"
+                      name="incide_promedio"
+                      checked={incidePromedio}
+                      onChange={() => setIncidePromedio(true)}
+                      disabled={isSubmitting}
+                      className="text-blue-900 focus:ring-blue-900 h-4 w-4"
+                    />
+                    <span>Sí</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                    <input
+                      type="radio"
+                      name="incide_promedio"
+                      checked={!incidePromedio}
+                      onChange={() => setIncidePromedio(false)}
+                      disabled={isSubmitting}
+                      className="text-blue-900 focus:ring-blue-900 h-4 w-4"
+                    />
+                    <span>No</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Si se selecciona &quot;No&quot;, la asignatura mantiene calificaciones y promedios propios, pero no participa del promedio general semestral ni anual.
                 </p>
               </div>
             </>

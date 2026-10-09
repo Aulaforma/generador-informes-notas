@@ -21,6 +21,7 @@ import {
 import { useGrades } from "@/context/GradesContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { GradeAuditModal } from "./GradeAuditModal";
 
 interface GradeEntryClientProps {
   courseId?: string;
@@ -145,6 +146,10 @@ export function GradeEntryClient({
     message: string;
     code?: string;
   } | null>(null);
+
+  // Estado para modal de Historial de cambios (UTP y Dirección)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const canViewAudit = profile?.rol === "utp" || profile?.rol === "direccion";
 
   // Carga evaluaciones y calificaciones para un curso_asignatura y período específico
   const loadEvaluationsAndGrades = useCallback(
@@ -1080,6 +1085,26 @@ export function GradeEntryClient({
 
               {/* Botones de acción */}
               <div className="flex items-center gap-3">
+                {/* Botón "Historial de cambios" (UTP y Dirección) */}
+                {canViewAudit && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAuditModalOpen(true)}
+                    disabled={evaluations.length === 0}
+                    title={
+                      evaluations.length === 0
+                        ? "No hay evaluaciones registradas en este período"
+                        : "Consultar historial de auditoría de calificaciones para este período"
+                    }
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Historial de cambios</span>
+                  </button>
+                )}
+
                 {/* Botón "+ Agregar evaluación" */}
                 <button
                   type="button"
@@ -1434,6 +1459,19 @@ export function GradeEntryClient({
         </main>
         )}
       </div>
+
+      {/* Modal de auditoría de calificaciones (UTP y Dirección) */}
+      {canViewAudit && (
+        <GradeAuditModal
+          isOpen={isAuditModalOpen}
+          onClose={() => setIsAuditModalOpen(false)}
+          cursoNombre={courseTitle}
+          asignaturaNombre={subjectDisplayName}
+          periodoNombre={periodName}
+          evaluaciones={evaluations}
+          estudiantes={students}
+        />
+      )}
     </div>
   );
 }
