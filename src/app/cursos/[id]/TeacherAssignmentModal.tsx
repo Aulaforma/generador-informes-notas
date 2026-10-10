@@ -67,8 +67,12 @@ export function TeacherAssignmentModal({
         const docSelected = docentes.find((d) => d.id === docIdOrNull);
         const nameText = docSelected
           ? `Prof. ${docSelected.nombres} ${docSelected.apellidos}`
-          : "Sin asignar";
-        onSuccess(`Profesor(a) Jefe actualizado correctamente a: ${nameText}.`);
+          : "Sin profesor(a) jefe asignado(a)";
+        onSuccess(
+          docSelected
+            ? `Profesor(a) Jefe asignado correctamente: ${nameText}.`
+            : "Profesor(a) Jefe desasignado: Sin profesor(a) jefe asignado(a)."
+        );
         onClose();
       } else {
         // Actualizar docente_id e incide_promedio en curso_asignaturas
@@ -89,7 +93,7 @@ export function TeacherAssignmentModal({
         const docSelected = docentes.find((d) => d.id === docIdOrNull);
         const nameText = docSelected
           ? `Prof. ${docSelected.nombres} ${docSelected.apellidos}`
-          : "Sin asignar";
+          : "Sin docente asignado";
         onSuccess(
           targetTitle
             ? `Configuración de "${targetTitle}" guardada correctamente (Docente: ${nameText}, Incide en promedio: ${incidePromedio ? "Sí" : "No"}).`
@@ -122,7 +126,7 @@ export function TeacherAssignmentModal({
             </div>
             <div>
               <h3 id="teacher-modal-title" className="text-base font-bold tracking-tight text-white">
-                {isProfJefe ? "Cambiar Profesor(a) Jefe" : "Asignar Docente"}
+                {isProfJefe ? "Profesor(a) Jefe del Curso" : "Asignar Docente"}
               </h3>
               <p className="text-xs text-slate-300">
                 {targetTitle ? targetTitle : "Gestión académica · Rol UTP"}
@@ -155,17 +159,21 @@ export function TeacherAssignmentModal({
               onChange={(e) => setSelectedDocenteId(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-colors"
             >
-              <option value="">— Sin asignar —</option>
-              {docentes.map((doc) => (
-                <option key={doc.id} value={doc.id.toString()}>
-                  Prof. {doc.apellidos}, {doc.nombres} (ID #{doc.id})
-                </option>
-              ))}
+              <option value="">
+                {isProfJefe ? "Sin profesor jefe asignado" : "Sin docente asignado"}
+              </option>
+              {docentes
+                .filter((doc) => doc.activo !== false)
+                .map((doc) => (
+                  <option key={doc.id} value={doc.id.toString()}>
+                    Prof. {doc.apellidos}, {doc.nombres} (ID #{doc.id})
+                  </option>
+                ))}
             </select>
 
             <span className="text-[11px] text-slate-400 mt-2 block">
               {isProfJefe
-                ? "El docente designado como Profesor Jefe tendrá acceso al consolidado de este curso."
+                ? "El docente designado como Profesor Jefe tendrá acceso al consolidado y a las libretas de este curso."
                 : "El docente seleccionado tendrá atribuciones para registrar calificaciones en esta asignatura."}
             </span>
           </div>

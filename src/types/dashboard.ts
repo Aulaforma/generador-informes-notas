@@ -170,5 +170,15 @@ export interface DbAccesoAuditoria {
   fecha_hora: string;
 }
 
+export interface DbConfiguracionInstitucional {
+  id: number;
+  anio: number;
+  nombre_establecimiento: string;
+  ciudad: string;
+  jefe_utp_nombre: string | null;
+  director_nombre: string | null;
+  updated_at: string;
+}
+
 
 

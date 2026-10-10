@@ -5,7 +5,7 @@ export interface ReportCardViewProps {
   studentName: string;
   studentListNumber: number;
   courseName: string;
-  headTeacherName: string;
+  headTeacherName?: string;
   schoolYear: number;
   schoolName?: string;
   city?: string;
@@ -15,6 +15,8 @@ export interface ReportCardViewProps {
   generalAvgAnual: string;
   periodoNombre?: string;
   periodoNumero?: 1 | 2 | "anual";
+  jefeUtpName?: string;
+  directorName?: string;
 }
 
 /**
@@ -39,6 +41,8 @@ export function ReportCardView({
   generalAvgAnual,
   periodoNombre,
   periodoNumero = 1,
+  jefeUtpName,
+  directorName,
 }: ReportCardViewProps) {
   const isSinglePeriod = periodoNumero === 1 || periodoNumero === 2;
 
@@ -53,6 +57,17 @@ export function ReportCardView({
   const hasNonContributingSubject = subjectRows.some(
     (s) => s.incidePromedio === false
   );
+
+  const isHeadTeacherAssigned =
+    Boolean(headTeacherName) &&
+    headTeacherName?.trim() !== "" &&
+    headTeacherName !== "Profesor(a) no asignado(a)" &&
+    headTeacherName !== "Sin asignar" &&
+    headTeacherName !== "Sin profesor(a) jefe asignado(a)";
+
+  const cleanHeadTeacherName = isHeadTeacherAssigned ? headTeacherName?.trim() : null;
+  const cleanJefeUtpName = jefeUtpName && jefeUtpName.trim() !== "" ? jefeUtpName.trim() : null;
+  const cleanDirectorName = directorName && directorName.trim() !== "" ? directorName.trim() : null;
 
   return (
     <article
@@ -473,30 +488,45 @@ export function ReportCardView({
         <div className="grid grid-cols-3 gap-8 text-center text-xs">
           <div>
             <div className="border-t border-slate-900 w-3/4 mx-auto pt-1 mb-0.5" />
-            <span className="font-bold text-slate-900 block text-[10px]">
+            {cleanHeadTeacherName && (
+              <span className="font-extrabold text-slate-900 block text-[9.5px] print:text-[8.5px] truncate leading-tight">
+                {cleanHeadTeacherName}
+              </span>
+            )}
+            <span className="font-bold text-slate-800 block text-[9px] print:text-[8px]">
               Profesor(a) Jefe
             </span>
-            <span className="text-[9px] text-slate-500 block">
+            <span className="text-[8px] text-slate-500 block print:text-[7.5px]">
               Firma y Timbre
             </span>
           </div>
 
           <div>
             <div className="border-t border-slate-900 w-3/4 mx-auto pt-1 mb-0.5" />
-            <span className="font-bold text-slate-900 block text-[10px]">
+            {cleanJefeUtpName && (
+              <span className="font-extrabold text-slate-900 block text-[9.5px] print:text-[8.5px] truncate leading-tight">
+                {cleanJefeUtpName}
+              </span>
+            )}
+            <span className="font-bold text-slate-800 block text-[9px] print:text-[8px]">
               Jefe UTP
             </span>
-            <span className="text-[9px] text-slate-500 block">
+            <span className="text-[8px] text-slate-500 block print:text-[7.5px]">
               Firma y Timbre
             </span>
           </div>
 
           <div>
             <div className="border-t border-slate-900 w-3/4 mx-auto pt-1 mb-0.5" />
-            <span className="font-bold text-slate-900 block text-[10px]">
+            {cleanDirectorName && (
+              <span className="font-extrabold text-slate-900 block text-[9.5px] print:text-[8.5px] truncate leading-tight">
+                {cleanDirectorName}
+              </span>
+            )}
+            <span className="font-bold text-slate-800 block text-[9px] print:text-[8px]">
               Director(a)
             </span>
-            <span className="text-[9px] text-slate-500 block">
+            <span className="text-[8px] text-slate-500 block print:text-[7.5px]">
               Firma y Timbre
             </span>
           </div>

@@ -76,7 +76,7 @@ export function CourseViewClient({
   const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   // Estados para datos del curso y profesor jefe dinámico desde Supabase
-  const [headTeacher, setHeadTeacher] = useState<string>("Sin asignar");
+  const [headTeacher, setHeadTeacher] = useState<string>("Sin profesor(a) jefe asignado(a)");
   const [isLoadingHeadTeacher, setIsLoadingHeadTeacher] = useState<boolean>(true);
   const [profesorJefeId, setProfesorJefeId] = useState<number | null>(null);
 
@@ -319,10 +319,10 @@ export function CourseViewClient({
         if (docData && docData.nombres && docData.apellidos) {
           setHeadTeacher(`Prof. ${docData.nombres} ${docData.apellidos}`.trim());
         } else {
-          setHeadTeacher("Sin asignar");
+          setHeadTeacher("Sin profesor(a) jefe asignado(a)");
         }
       } else {
-        setHeadTeacher("Sin asignar");
+        setHeadTeacher("Sin profesor(a) jefe asignado(a)");
       }
 
       const cursoIdNum = cursoData.id;
@@ -362,7 +362,7 @@ export function CourseViewClient({
       );
       setCourseNotFound(true);
       setCursoAsignaturas([]);
-      setHeadTeacher("Sin asignar");
+      setHeadTeacher("Sin profesor(a) jefe asignado(a)");
     } finally {
       setIsLoadingSubjects(false);
       setIsLoadingHeadTeacher(false);
@@ -627,7 +627,7 @@ export function CourseViewClient({
                     <span>
                       Profesor(a) Jefe:{" "}
                       <strong className="text-slate-800 font-semibold">
-                        {isLoadingHeadTeacher ? "Cargando..." : (headTeacher || "Sin asignar")}
+                        {isLoadingHeadTeacher ? "Cargando..." : (headTeacher || "Sin profesor(a) jefe asignado(a)")}
                       </strong>
                     </span>
                     {isUtp && (

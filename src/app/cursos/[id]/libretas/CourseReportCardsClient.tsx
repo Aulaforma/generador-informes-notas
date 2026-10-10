@@ -10,6 +10,7 @@ import {
   DbCalificacion,
   DbPeriodo,
   DbDocente,
+  DbConfiguracionInstitucional,
 } from "@/types/dashboard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -54,6 +55,7 @@ export function CourseReportCardsClient({
 
   // Estados de datos
   const [curso, setCurso] = useState<DbCursoWithDocente | null>(null);
+  const [configuracion, setConfiguracion] = useState<DbConfiguracionInstitucional | null>(null);
   const [periodos, setPeriodos] = useState<DbPeriodo[]>([]);
   const [selectedPeriodo, setSelectedPeriodo] = useState<1 | 2 | "anual">(1);
   const [reportCards, setReportCards] = useState<StudentReportCardItem[]>([]);
@@ -179,6 +181,19 @@ export function CourseReportCardsClient({
         setSelectedPeriodo(activePeriodo.numero as 1 | 2);
       } else if (loadedPeriodos.length > 0 && (loadedPeriodos[0].numero === 1 || loadedPeriodos[0].numero === 2)) {
         setSelectedPeriodo(loadedPeriodos[0].numero as 1 | 2);
+      }
+
+      // 4.1 Obtener configuración institucional del año escolar (1 sola consulta para todo el curso)
+      const { data: configData, error: configErr } = await supabase
+        .from("configuracion_institucional")
+        .select("id, anio, nombre_establecimiento, ciudad, jefe_utp_nombre, director_nombre, updated_at")
+        .eq("anio", courseYear)
+        .maybeSingle();
+
+      if (!configErr && configData) {
+        setConfiguracion(configData as DbConfiguracionInstitucional);
+      } else {
+        setConfiguracion(null);
       }
 
       // 5. Obtener asignaturas asociadas al curso (1 consulta)
@@ -360,6 +375,11 @@ export function CourseReportCardsClient({
       ? "Resumen Anual"
       : currentPeriodoObj?.nombre ||
         (selectedPeriodo === 1 ? "Primer Semestre" : "Segundo Semestre");
+
+  const resolvedSchoolName = configuracion?.nombre_establecimiento?.trim() || "Liceo Andrés Alcázar de Tucapel";
+  const resolvedCity = configuracion?.ciudad?.trim() || "Tucapel";
+  const resolvedJefeUtp = configuracion?.jefe_utp_nombre?.trim() || undefined;
+  const resolvedDirector = configuracion?.director_nombre?.trim() || undefined;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -643,8 +663,10 @@ export function CourseReportCardsClient({
                     courseName={courseDisplayName}
                     headTeacherName={headTeacherDisplayName}
                     schoolYear={schoolYear}
-                    schoolName="Liceo Andrés Alcázar de Tucapel"
-                    city="Tucapel"
+                    schoolName={resolvedSchoolName}
+                    city={resolvedCity}
+                    jefeUtpName={resolvedJefeUtp}
+                    directorName={resolvedDirector}
                     subjectRows={item.subjectRows}
                     generalAvgS1={item.generalAvgS1}
                     generalAvgS2={item.generalAvgS2}
