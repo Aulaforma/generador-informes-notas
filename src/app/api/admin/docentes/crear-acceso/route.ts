@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   authorizeUtpUser,
   generateTemporaryPassword,
+  registrarAuditoriaAcceso,
 } from "@/lib/supabaseServerAdmin";
 
 /**
@@ -189,12 +190,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 11. Auditoría administrativa no bloqueante
+    const auditOk = await registrarAuditoriaAcceso(supabaseAdmin, {
+      usuarioUtpId: auth.requesterUser.id,
+      docenteId: docente.id,
+      usuarioDocenteId: newUserId,
+      accion: "crear_acceso",
+    });
+
     return NextResponse.json({
       success: true,
       message: "Acceso creado correctamente.",
       docenteId: docente.id,
       email: cleanEmail,
       temporalPassword: temporaryPassword,
+      auditWarning: !auditOk,
     });
   } catch (err: unknown) {
     const message =
@@ -202,3 +212,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

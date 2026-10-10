@@ -181,3 +181,48 @@ export async function authorizeUtpUser(request: NextRequest): Promise<AuthorizeU
     requesterUser: user,
   };
 }
+
+export interface RegistrarAuditoriaAccesoParams {
+  usuarioUtpId: string;
+  docenteId: number;
+  usuarioDocenteId: string;
+  accion: "crear_acceso" | "restablecer_acceso";
+}
+
+/**
+ * Registra un evento de trazabilidad administrativa en public.accesos_auditoria.
+ * La operación es estrictamente no bloqueante:
+ * - Si la inserción tiene éxito, retorna true.
+ * - Si falla, registra el error técnico en servidor (SIN contraseñas) y retorna false.
+ */
+export async function registrarAuditoriaAcceso(
+  supabaseAdmin: SupabaseClient,
+  params: RegistrarAuditoriaAccesoParams
+): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin.from("accesos_auditoria").insert({
+      usuario_utp_id: params.usuarioUtpId,
+      docente_id: params.docenteId,
+      usuario_docente_id: params.usuarioDocenteId,
+      accion: params.accion,
+    });
+
+    if (error) {
+      console.error(
+        `[AUDITORIA_ERROR] No se pudo registrar auditoría de acceso (${params.accion}) para docente ${params.docenteId}:`,
+        error.message
+      );
+      return false;
+    }
+
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error(
+      `[AUDITORIA_ERROR] Excepción inesperada al registrar auditoría de acceso (${params.accion}) para docente ${params.docenteId}:`,
+      msg
+    );
+    return false;
+  }
+}
+

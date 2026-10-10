@@ -161,4 +161,14 @@ export interface DbPerfil {
   debe_cambiar_password?: boolean;
 }
 
+export interface DbAccesoAuditoria {
+  id: number;
+  usuario_utp_id: string;
+  docente_id: number;
+  usuario_docente_id: string;
+  accion: "crear_acceso" | "restablecer_acceso";
+  fecha_hora: string;
+}
+
+
 

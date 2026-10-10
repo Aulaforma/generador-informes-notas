@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   authorizeUtpUser,
   generateTemporaryPassword,
+  registrarAuditoriaAcceso,
 } from "@/lib/supabaseServerAdmin";
 
 const UUID_REGEX =
@@ -169,12 +170,21 @@ export async function POST(request: NextRequest) {
       authUserData.user.email?.trim().toLowerCase() ||
       "";
 
+    // 16. Auditoría administrativa no bloqueante
+    const auditOk = await registrarAuditoriaAcceso(supabaseAdmin, {
+      usuarioUtpId: auth.requesterUser.id,
+      docenteId: docente.id,
+      usuarioDocenteId: perfil.id,
+      accion: "restablecer_acceso",
+    });
+
     // Retornar la contraseña temporal una sola vez al solicitante UTP
     return NextResponse.json({
       success: true,
       message: "Acceso restablecido correctamente.",
       email: cleanEmail,
       temporalPassword: temporaryPassword,
+      auditWarning: !auditOk,
     });
   } catch (err: unknown) {
     const message =
@@ -182,3 +192,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
