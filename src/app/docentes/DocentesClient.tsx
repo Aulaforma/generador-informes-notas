@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { DocenteModal } from "./DocenteModal";
 import { CrearAccesoModal } from "./CrearAccesoModal";
+import { RestablecerAccesoModal } from "./RestablecerAccesoModal";
 
 interface DocentesClientProps {
   institution: InstitutionalInfo;
@@ -38,6 +39,10 @@ export function DocentesClient({ institution }: DocentesClientProps) {
   const [isAccesoModalOpen, setIsAccesoModalOpen] = useState<boolean>(false);
   const [docenteParaAcceso, setDocenteParaAcceso] = useState<DbDocente | null>(null);
   const [docenteIdsConAcceso, setDocenteIdsConAcceso] = useState<Set<number>>(new Set());
+
+  // Modal para restablecer acceso institucional
+  const [isRestablecerModalOpen, setIsRestablecerModalOpen] = useState<boolean>(false);
+  const [docenteParaRestablecer, setDocenteParaRestablecer] = useState<DbDocente | null>(null);
 
   const fetchDocentes = useCallback(async () => {
     if (!isUtp) return;
@@ -117,6 +122,15 @@ export function DocentesClient({ institution }: DocentesClientProps) {
   const handleAccesoSuccess = (docenteId: number) => {
     setDocenteIdsConAcceso((prev) => new Set([...prev, docenteId]));
     setActiveNotice("Acceso institucional creado exitosamente para el docente.");
+  };
+
+  const handleOpenRestablecerAcceso = (docente: DbDocente) => {
+    setDocenteParaRestablecer(docente);
+    setIsRestablecerModalOpen(true);
+  };
+
+  const handleRestablecerSuccess = () => {
+    setActiveNotice("Acceso institucional restablecido exitosamente. Se emitió una nueva contraseña temporal obligatoria.");
   };
 
   const handleSuccess = (msg: string) => {
@@ -471,12 +485,25 @@ export function DocentesClient({ institution }: DocentesClientProps) {
                             <td className="px-6 py-3.5 text-right">
                               <div className="flex items-center justify-end gap-2">
                                 {docenteIdsConAcceso.has(docente.id) ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-900 border border-blue-200">
-                                    <svg className="w-3.5 h-3.5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                    </svg>
-                                    <span>Acceso habilitado</span>
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-900 border border-blue-200">
+                                      <svg className="w-3.5 h-3.5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                      </svg>
+                                      <span>Acceso habilitado</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRestablecerAcceso(docente)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer"
+                                      title="Restablecer acceso y emitir nueva contraseña temporal"
+                                    >
+                                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                      <span>Restablecer acceso</span>
+                                    </button>
+                                  </div>
                                 ) : (
                                   <button
                                     type="button"
@@ -534,6 +561,17 @@ export function DocentesClient({ institution }: DocentesClientProps) {
             setDocenteParaAcceso(null);
           }}
           onSuccess={handleAccesoSuccess}
+        />
+
+        {/* Modal para Restablecer Acceso Institucional de Docente */}
+        <RestablecerAccesoModal
+          isOpen={isRestablecerModalOpen}
+          docente={docenteParaRestablecer}
+          onClose={() => {
+            setIsRestablecerModalOpen(false);
+            setDocenteParaRestablecer(null);
+          }}
+          onSuccess={handleRestablecerSuccess}
         />
 
         {/* Footer */}
