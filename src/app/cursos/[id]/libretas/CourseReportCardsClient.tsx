@@ -54,6 +54,8 @@ export function CourseReportCardsClient({
 
   // Estados de datos
   const [curso, setCurso] = useState<DbCursoWithDocente | null>(null);
+  const [periodos, setPeriodos] = useState<DbPeriodo[]>([]);
+  const [selectedPeriodo, setSelectedPeriodo] = useState<1 | 2 | "anual">(1);
   const [reportCards, setReportCards] = useState<StudentReportCardItem[]>([]);
 
   // Estados visuales
@@ -161,13 +163,23 @@ export function CourseReportCardsClient({
         return;
       }
 
-      // 4. Obtener períodos del año (1 consulta)
+      // 4. Obtener períodos del año y respetar período activo (1 consulta)
       const courseYear = resolvedCurso.anio || 2026;
-      await supabase
+      const { data: periodosData } = await supabase
         .from("periodos")
         .select("id, numero, nombre, anio, activo, cerrado")
         .eq("anio", courseYear)
         .order("numero", { ascending: true });
+
+      const loadedPeriodos = (periodosData as DbPeriodo[]) || [];
+      setPeriodos(loadedPeriodos);
+
+      const activePeriodo = loadedPeriodos.find((p) => p.activo);
+      if (activePeriodo && (activePeriodo.numero === 1 || activePeriodo.numero === 2)) {
+        setSelectedPeriodo(activePeriodo.numero as 1 | 2);
+      } else if (loadedPeriodos.length > 0 && (loadedPeriodos[0].numero === 1 || loadedPeriodos[0].numero === 2)) {
+        setSelectedPeriodo(loadedPeriodos[0].numero as 1 | 2);
+      }
 
       // 5. Obtener asignaturas asociadas al curso (1 consulta)
       const { data: caData, error: caErr } = await supabase
@@ -342,9 +354,16 @@ export function CourseReportCardsClient({
     ? `Prof. ${curso.docentes.nombres} ${curso.docentes.apellidos}`
     : "Profesor(a) no asignado(a)";
 
+  const currentPeriodoObj = periodos.find((p) => p.numero === selectedPeriodo);
+  const currentPeriodoNombre =
+    selectedPeriodo === "anual"
+      ? "Resumen Anual"
+      : currentPeriodoObj?.nombre ||
+        (selectedPeriodo === 1 ? "Primer Semestre" : "Segundo Semestre");
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {/* ESTILOS DE IMPRESIÓN MASIVA (CARTA HORIZONTAL, SALTO ENTRE LIBRETAS) */}
+      {/* ESTILOS DE IMPRESIÓN MASIVA (CARTA VERTICAL / HORIZONTAL, SALTO ENTRE LIBRETAS) */}
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
@@ -360,7 +379,7 @@ export function CourseReportCardsClient({
             print-color-adjust: exact !important;
           }
           @page {
-            size: letter landscape;
+            size: ${selectedPeriodo === "anual" ? "letter landscape" : "letter portrait"};
             margin: 8mm;
           }
           .report-card-page {
@@ -379,7 +398,7 @@ export function CourseReportCardsClient({
       `}} />
 
       {/* BARRA SUPERIOR INSTITUCIONAL (Oculta al imprimir) */}
-      <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-2xs">
+      <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-40 px-4 sm:px-6 py-3 shadow-2xs">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div>
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 mb-0.5">
@@ -396,22 +415,65 @@ export function CourseReportCardsClient({
               <span>/</span>
               <span className="text-slate-900 font-bold">Libretas del Curso</span>
             </nav>
-            <h1 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
               <span>Libretas del curso — {courseDisplayName}</span>
               {!isLoading && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-900 border border-blue-200">
-                  {reportCards.length} estudiantes activos · Año {schoolYear}
+                  {reportCards.length} estudiantes · {currentPeriodoNombre}
                 </span>
               )}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Selector de período */}
+            <div className="inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo(1)}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === 1
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                1° Semestre
+                {periodos.find((p) => p.numero === 1)?.activo && (
+                  <span className="ml-1 text-[10px] opacity-80">(Activo)</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo(2)}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === 2
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                2° Semestre
+                {periodos.find((p) => p.numero === 2)?.activo && (
+                  <span className="ml-1 text-[10px] opacity-80">(Activo)</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo("anual")}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === "anual"
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                Anual
+              </button>
+            </div>
+
             <Link
               href={`/cursos/${courseId}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors"
             >
-              <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               <span>Volver al curso</span>
@@ -422,6 +484,7 @@ export function CourseReportCardsClient({
               onClick={handlePrint}
               disabled={isLoading || Boolean(loadError) || isUnauthorized || reportCards.length === 0}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900"
+              title="Imprimir libretas del curso"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -431,7 +494,7 @@ export function CourseReportCardsClient({
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              <span>Imprimir / Guardar PDF ({reportCards.length})</span>
+              <span>Imprimir libretas ({reportCards.length})</span>
             </button>
           </div>
         </div>
@@ -554,6 +617,26 @@ export function CourseReportCardsClient({
                   key={item.student.id}
                   className="report-card-page mb-8 print:mb-0"
                 >
+                  {/* BARRA SUPERIOR DE CONVENIENCIA EN PANTALLA (Oculta al imprimir) */}
+                  <div className={`no-print mx-auto mb-1.5 flex items-center justify-between px-2 text-xs ${
+                    selectedPeriodo === "anual" ? "max-w-[1120px]" : "max-w-[840px]"
+                  }`}>
+                    <span className="font-semibold text-slate-600">
+                      Estudiante N° {item.student.numero_lista}: <strong className="text-slate-900">{fullName}</strong>
+                    </span>
+                    <Link
+                      href={`/cursos/${courseId}/estudiantes/${item.student.id}/libreta`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold text-blue-900 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
+                      title="Abrir e imprimir libreta individual de este estudiante"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span>Abrir libreta individual</span>
+                    </Link>
+                  </div>
+
                   <ReportCardView
                     studentName={fullName}
                     studentListNumber={item.student.numero_lista}
@@ -566,6 +649,8 @@ export function CourseReportCardsClient({
                     generalAvgS1={item.generalAvgS1}
                     generalAvgS2={item.generalAvgS2}
                     generalAvgAnual={item.generalAvgAnual}
+                    periodoNumero={selectedPeriodo}
+                    periodoNombre={currentPeriodoNombre}
                   />
                 </div>
               );

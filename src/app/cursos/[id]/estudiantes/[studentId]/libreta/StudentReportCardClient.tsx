@@ -49,6 +49,8 @@ export function StudentReportCardClient({
   // Estados de datos
   const [student, setStudent] = useState<DbStudent | null>(null);
   const [curso, setCurso] = useState<DbCursoWithDocente | null>(null);
+  const [periodos, setPeriodos] = useState<DbPeriodo[]>([]);
+  const [selectedPeriodo, setSelectedPeriodo] = useState<1 | 2 | "anual">(1);
   const [subjectRows, setSubjectRows] = useState<SubjectConsolidated[]>([]);
   const [generalAvgS1, setGeneralAvgS1] = useState<string>("-");
   const [generalAvgS2, setGeneralAvgS2] = useState<string>("-");
@@ -134,7 +136,7 @@ export function StudentReportCardClient({
         return;
       }
 
-      // 4. Cargar períodos del año
+      // 4. Cargar períodos del año y respetar el período activo del sistema
       const courseYear = resolvedCurso.anio;
       const { data: periodosData, error: periodosErr } = await supabase
         .from("periodos")
@@ -144,6 +146,17 @@ export function StudentReportCardClient({
 
       if (periodosErr) {
         throw new Error(`Error al consultar períodos en Supabase: ${periodosErr.message}`);
+      }
+
+      const loadedPeriodos = (periodosData as DbPeriodo[]) || [];
+      setPeriodos(loadedPeriodos);
+
+      // Si existe un período activo en el sistema, seleccionarlo por defecto
+      const activePeriodo = loadedPeriodos.find((p) => p.activo);
+      if (activePeriodo && (activePeriodo.numero === 1 || activePeriodo.numero === 2)) {
+        setSelectedPeriodo(activePeriodo.numero as 1 | 2);
+      } else if (loadedPeriodos.length > 0 && (loadedPeriodos[0].numero === 1 || loadedPeriodos[0].numero === 2)) {
+        setSelectedPeriodo(loadedPeriodos[0].numero as 1 | 2);
       }
 
       // 5. Obtener asignaturas asociadas al curso mediante curso_asignaturas
@@ -313,9 +326,16 @@ export function StudentReportCardClient({
     ? `Prof. ${curso.docentes.nombres} ${curso.docentes.apellidos}`
     : "Profesor(a) no asignado(a)";
 
+  const currentPeriodoObj = periodos.find((p) => p.numero === selectedPeriodo);
+  const currentPeriodoNombre =
+    selectedPeriodo === "anual"
+      ? "Resumen Anual"
+      : currentPeriodoObj?.nombre ||
+        (selectedPeriodo === 1 ? "Primer Semestre" : "Segundo Semestre");
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {/* ESTILOS DE IMPRESIÓN OFICIALES (Hoja CARTA Horizontal / letter landscape) */}
+      {/* ESTILOS DE IMPRESIÓN OFICIALES (Vertical para período individual / Horizontal para anual) */}
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
@@ -331,7 +351,7 @@ export function StudentReportCardClient({
             print-color-adjust: exact !important;
           }
           @page {
-            size: letter landscape;
+            size: ${selectedPeriodo === "anual" ? "letter landscape" : "letter portrait"};
             margin: 8mm;
           }
           .avoid-break {
@@ -342,46 +362,100 @@ export function StudentReportCardClient({
       `}} />
 
       {/* BARRA SUPERIOR DE ACCIONES WEB (Oculta al imprimir) */}
-      <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-2xs">
+      <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-40 px-4 sm:px-6 py-3 shadow-2xs">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500">
-            <Link href="/" className="hover:text-blue-900 font-medium transition-colors">
-              {isDocente ? "Panel Docente" : "Panel UTP"}
-            </Link>
-            <span>/</span>
-            <Link
-              href={`/cursos/${courseId}`}
-              className="hover:text-blue-900 font-medium transition-colors"
-            >
-              {courseDisplayName}
-            </Link>
-            <span>/</span>
-            <Link
-              href={`/cursos/${courseId}/estudiantes/${studentId}`}
-              className="hover:text-blue-900 font-medium transition-colors"
-            >
-              Consolidado
-            </Link>
-            <span>/</span>
-            <span className="text-slate-900 font-bold">Libreta Oficial (Horizontal)</span>
-          </nav>
+          <div>
+            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 mb-0.5">
+              <Link href="/" className="hover:text-blue-900 font-medium transition-colors">
+                {isDocente ? "Panel Docente" : "Panel UTP"}
+              </Link>
+              <span>/</span>
+              <Link
+                href={`/cursos/${courseId}`}
+                className="hover:text-blue-900 font-medium transition-colors"
+              >
+                {courseDisplayName}
+              </Link>
+              <span>/</span>
+              <Link
+                href={`/cursos/${courseId}/estudiantes/${studentId}`}
+                className="hover:text-blue-900 font-medium transition-colors"
+              >
+                Consolidado
+              </Link>
+              <span>/</span>
+              <span className="text-slate-900 font-bold">Libreta Oficial</span>
+            </nav>
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <span>{studentFullName}</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                {currentPeriodoNombre}
+              </span>
+            </h1>
+          </div>
 
-          <div className="flex items-center gap-2.5">
+          {/* CONTROLES: SELECTOR DE PERÍODO + ACCIÓN IMPRIMIR */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Selector de período */}
+            <div className="inline-flex items-center rounded-lg border border-slate-300 bg-slate-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo(1)}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === 1
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                1° Semestre
+                {periodos.find((p) => p.numero === 1)?.activo && (
+                  <span className="ml-1 text-[10px] opacity-80">(Activo)</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo(2)}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === 2
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                2° Semestre
+                {periodos.find((p) => p.numero === 2)?.activo && (
+                  <span className="ml-1 text-[10px] opacity-80">(Activo)</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodo("anual")}
+                className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                  selectedPeriodo === "anual"
+                    ? "bg-blue-900 text-white shadow-2xs"
+                    : "text-slate-700 hover:text-blue-900 hover:bg-slate-100"
+                }`}
+              >
+                Anual
+              </button>
+            </div>
+
             <Link
               href={`/cursos/${courseId}/estudiantes/${studentId}`}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-900 text-xs font-semibold shadow-2xs transition-colors"
             >
-              <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              <span>Volver al consolidado</span>
+              <span>Volver</span>
             </Link>
 
+            {/* BOTÓN OFICIAL DE IMPRESIÓN */}
             <button
               type="button"
               onClick={handlePrint}
               disabled={isLoading || Boolean(loadError) || isUnauthorized || !student || !curso || !curso.anio}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900"
+              title="Imprimir libreta o guardar en PDF"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -391,7 +465,7 @@ export function StudentReportCardClient({
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              <span>Imprimir / Guardar PDF</span>
+              <span>Imprimir libreta</span>
             </button>
           </div>
         </div>
@@ -495,6 +569,8 @@ export function StudentReportCardClient({
               generalAvgS1={generalAvgS1}
               generalAvgS2={generalAvgS2}
               generalAvgAnual={generalAvgAnual}
+              periodoNumero={selectedPeriodo}
+              periodoNombre={currentPeriodoNombre}
             />
           </div>
         )}
