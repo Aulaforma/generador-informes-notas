@@ -13,6 +13,21 @@ import { getSupabaseAdmin } from "@/lib/supabaseServerAdmin";
  * - No modifica tablas de perfiles, roles, cursos ni notas.
  * - No expone secretos ni claves en logs ni respuestas.
  */
+function logSafeNetworkError(context: string, error: unknown) {
+  if (!error) return;
+  const err = error as {
+    name?: string;
+    message?: string;
+    cause?: { code?: string; message?: string };
+  };
+  console.error(`[Admin UTP Reset] ${context}:`, {
+    name: err.name,
+    message: err.message,
+    code: err.cause?.code,
+    causeMessage: err.cause?.message,
+  });
+}
+
 export async function POST(request: NextRequest) {
   // 1. Verificación del secreto administrativo temporal
   const expectedSecret = process.env.RECOVERY_ADMIN_SECRET;
@@ -73,6 +88,7 @@ export async function POST(request: NextRequest) {
   try {
     supabaseAdmin = getSupabaseAdmin();
   } catch (err: unknown) {
+    logSafeNetworkError("Error al inicializar cliente Supabase Admin", err);
     const message = err instanceof Error ? err.message : "Error de configuración de Supabase Admin.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -89,6 +105,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (listError) {
+        logSafeNetworkError("Error al listar usuarios en Supabase Auth", listError);
         return NextResponse.json(
           { error: `Error al buscar usuario en Supabase Auth: ${listError.message}` },
           { status: 500 }
@@ -126,6 +143,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (perfilError) {
+      logSafeNetworkError("Error al consultar tabla perfiles", perfilError);
       return NextResponse.json(
         { error: `Error al verificar perfil en la base de datos: ${perfilError.message}` },
         { status: 500 }
@@ -162,6 +180,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (updateError) {
+      logSafeNetworkError("Error al actualizar contraseña de usuario", updateError);
       return NextResponse.json(
         { error: `Error al actualizar la contraseña: ${updateError.message}` },
         { status: 500 }
@@ -175,6 +194,7 @@ export async function POST(request: NextRequest) {
       email: authUser.email,
     });
   } catch (err: unknown) {
+    logSafeNetworkError("Excepción inesperada en proceso de restablecimiento", err);
     const message = err instanceof Error ? err.message : "Error interno del servidor.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -8,8 +8,16 @@ import crypto from "crypto";
  * y NUNCA debe ser expuesto ni importado en componentes del cliente ("use client").
  */
 export function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const supabaseUrl = rawUrl
+    ? rawUrl.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "")
+    : undefined;
+
+  const serviceRoleKey = rawServiceKey
+    ? rawServiceKey.trim().replace(/^["']|["']$/g, "")
+    : undefined;
 
   if (!supabaseUrl) {
     throw new Error(
