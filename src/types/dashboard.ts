@@ -144,7 +144,8 @@ export type NavSection =
   | "docentes"
   | "periodos"
   | "libretas"
-  | "configuracion";
+  | "configuracion"
+  | "importar-notas-pdf";
 
 export interface SubjectGradesData {
   [subjectId: string]: {

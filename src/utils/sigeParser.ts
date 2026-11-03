@@ -541,7 +541,7 @@ export function getCanonicalLevel(rawText?: string): string | null {
     if (n) return `${n}B`;
   }
 
-  const basicaNumMatch = norm.match(/([1-8])\s*(?:°|º|er|ero|ro|to|do|vo)?\s*basic[oa]/);
+  const basicaNumMatch = norm.match(/([1-8])\s*(?:°|º|er|ero|ro|to|do|vo)?\s*(?:ano|ano\s+[a-z]+)?\s*basic[oa]/);
   if (basicaNumMatch) {
     return `${basicaNumMatch[1]}B`;
   }
@@ -560,7 +560,7 @@ export function getCanonicalLevel(rawText?: string): string | null {
     if (n && parseInt(n, 10) <= 4) return `${n}M`;
   }
 
-  const mediaNumMatch = norm.match(/([1-4])\s*(?:°|º|er|ero|ro|to|do)?\s*medi[oa]/);
+  const mediaNumMatch = norm.match(/([1-4])\s*(?:°|º|er|ero|ro|to|do)?\s*(?:ano|ano\s+[a-z]+)?\s*medi[oa]/);
   if (mediaNumMatch) {
     return `${mediaNumMatch[1]}M`;
   }
@@ -585,6 +585,13 @@ export function extractCourseLetter(text?: string, explicitLetter?: string): str
   if (/^[a-zA-Z]$/.test(trimmed)) {
     return trimmed.toUpperCase();
   }
+
+  // Soporta casos tipo "4° AÑO A MEDIA", "2° AÑO B BÁSICA"
+  const intermediateLetterMatch = trimmed.match(/\b(?:año|ano)\s+([a-zA-Z])\s+(?:media|basica|básica)\b/i);
+  if (intermediateLetterMatch) {
+    return intermediateLetterMatch[1].toUpperCase();
+  }
+
   const match = trimmed.match(/(?:[\s\-_/()]|\b)([a-zA-Z])(?:\s*[\)\]])?$/);
   if (match) {
     return match[1].toUpperCase();
