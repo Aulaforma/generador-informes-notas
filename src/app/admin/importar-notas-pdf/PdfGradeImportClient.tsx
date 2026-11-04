@@ -26,6 +26,20 @@ interface PdfGradeImportClientProps {
   institution: InstitutionalInfo;
 }
 
+interface ImportRpcResult {
+  insertadas: number;
+  duplicadas: number;
+  conflictos: number;
+  evaluaciones_creadas: number;
+  errores: Array<{
+    estudiante_id?: string;
+    curso_asignatura_id?: string;
+    orden?: string;
+    nota?: string;
+    error: string;
+  }>;
+}
+
 export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps) {
   const { profile, isLoading: authLoading } = useAuth();
   const isUtp = profile?.rol === "utp";
@@ -39,6 +53,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
   const [selectedReportIndex, setSelectedReportIndex] = useState<number | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados de la importación real (Etapa 19E)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportRpcResult | null>(null);
+  const [importErrorMessage, setImportErrorMessage] = useState<string | null>(null);
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false);
 
   const toggleSubjectExpansion = (key: string) => {
     setExpandedSubjects((prev) => ({
@@ -319,6 +340,84 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
     };
   };
 
+  // Re-evaluar calificaciones existentes tras una importación o modificación
+  const refreshReportValidation = async (reportIndex: number) => {
+    const report = reports[reportIndex];
+    if (!report || !report.systemStudent) return;
+
+    const linkedCaIds = report.subjects
+      .map((s) => s.cursoAsignaturaId)
+      .filter((id): id is number => id !== null);
+
+    let evaluaciones: RawEvaluation[] = [];
+    let calificaciones: RawCalificacion[] = [];
+
+    if (linkedCaIds.length > 0 && report.systemStudent?.id) {
+      try {
+        const { data: evData, error: evErr } = await supabase
+          .from("evaluaciones")
+          .select("id, curso_asignatura_id, nombre, orden, periodo")
+          .in("curso_asignatura_id", linkedCaIds)
+          .eq("periodo", 1)
+          .order("orden", { ascending: true });
+
+        if (!evErr && evData) {
+          evaluaciones = evData as RawEvaluation[];
+          const evalIds = evaluaciones.map((e) => e.id);
+
+          if (evalIds.length > 0) {
+            const { data: calData, error: calErr } = await supabase
+              .from("calificaciones")
+              .select("id, estudiante_id, evaluacion_id, nota")
+              .eq("estudiante_id", report.systemStudent.id)
+              .in("evaluacion_id", evalIds);
+
+            if (!calErr && calData) {
+              calificaciones = calData as RawCalificacion[];
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error al refrescar evaluaciones y notas:", err);
+      }
+    }
+
+    const gradesAnalysisResult = computeGradesAnalysis(
+      report.subjects,
+      evaluaciones,
+      calificaciones
+    );
+
+    const overallResult = computeOverallPdfStatus({
+      studentMatchStatus: report.studentMatchStatus,
+      courseMatchStatus: report.courseMatchStatus,
+      subjects: gradesAnalysisResult.updatedSubjects,
+      notasNuevasCount: gradesAnalysisResult.notasNuevasCount,
+      notasDuplicadasCount: gradesAnalysisResult.notasDuplicadasCount,
+      notasConflictosCount: gradesAnalysisResult.notasConflictosCount,
+      evaluacionesFaltantesCount: gradesAnalysisResult.evaluacionesFaltantesCount,
+      systemCourseName: report.systemCourse?.nombre,
+      cursoPdf: report.cursoPdf,
+    });
+
+    const updatedReport: ValidatedPdfReport = {
+      ...report,
+      subjects: gradesAnalysisResult.updatedSubjects,
+      overallStatus: overallResult.overallStatus,
+      statusMessage: overallResult.statusMessage,
+      notasNuevasCount: gradesAnalysisResult.notasNuevasCount,
+      notasDuplicadasCount: gradesAnalysisResult.notasDuplicadasCount,
+      notasConflictosCount: gradesAnalysisResult.notasConflictosCount,
+      evaluacionesFaltantesCount: gradesAnalysisResult.evaluacionesFaltantesCount,
+    };
+
+    setReports((prev) => {
+      const copy = [...prev];
+      copy[reportIndex] = updatedReport;
+      return copy;
+    });
+  };
+
   // Manejar selección de uno o varios archivos PDF
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -479,10 +578,85 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
     setReports(newReportsList);
   };
 
+  // Ejecutar importación real en Supabase (Etapa 19E)
+  const handleExecuteImport = async () => {
+    if (selectedReportIndex === null || !reports[selectedReportIndex]) return;
+    const report = reports[selectedReportIndex];
+
+    if (!report.systemStudent || report.overallStatus !== "LISTO_PARA_IMPORTAR") {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportErrorMessage(null);
+
+    // Preparar el lote de notas validadas para el estudiante
+    const notasLote: Array<{
+      estudiante_id: number;
+      curso_asignatura_id: number;
+      periodo: number;
+      orden: number;
+      nota: number;
+      nombre_evaluacion: string;
+    }> = [];
+
+    report.subjects.forEach((sub) => {
+      if (!sub.isConceptual && sub.cursoAsignaturaId && sub.notasPeriodo1.length > 0) {
+        sub.notasPeriodo1.forEach((gradeVal, idx) => {
+          notasLote.push({
+            estudiante_id: report.systemStudent!.id,
+            curso_asignatura_id: sub.cursoAsignaturaId!,
+            periodo: 1,
+            orden: idx + 1,
+            nota: Number(gradeVal.toFixed(1)),
+            nombre_evaluacion: `Nota histórica ${idx + 1}`,
+          });
+        });
+      }
+    });
+
+    try {
+      // Invocación a la función RPC con el cliente autenticado UTP
+      const { data, error } = await supabase.rpc("importar_notas_historicas_pdf", {
+        p_notas: { notas: notasLote },
+      });
+
+      if (error) {
+        const isRpcMissing =
+          error.message.includes("importar_notas_historicas_pdf") ||
+          error.code === "PGRST202" ||
+          error.code === "42883";
+
+        const detailedMsg = isRpcMissing
+          ? "La función RPC 'importar_notas_historicas_pdf' aún no ha sido creada en Supabase. Por favor ejecute el script SQL generado en 'supabase/importar_notas_historicas_pdf.sql' a través del SQL Editor de Supabase."
+          : `Error devuelto por Supabase: ${error.message}`;
+
+        setImportErrorMessage(detailedMsg);
+        setIsImporting(false);
+        return;
+      }
+
+      const res = data as ImportRpcResult;
+      setImportResult(res);
+      setIsConfirmModalOpen(false);
+      setIsResultModalOpen(true);
+
+      // Refrescar validación inmediatamente contra la base de datos (Requisito 10)
+      await refreshReportValidation(selectedReportIndex);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error desconocido durante la importación.";
+      setImportErrorMessage(msg);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleClearReports = () => {
     setReports([]);
     setSelectedReportIndex(null);
     setExpandedSubjects({});
+    setImportResult(null);
+    setImportErrorMessage(null);
   };
 
   if (authLoading) {
@@ -532,6 +706,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
   const totalRevisar = reports.filter((r) => r.overallStatus === "REVISAR").length;
   const totalDuplicados = reports.filter((r) => r.overallStatus === "DUPLICADO").length;
   const totalErrores = reports.filter((r) => r.overallStatus === "ERROR" || r.overallStatus === "PDF_SIN_TEXTO").length;
+
+  // Total de notas numéricas del reporte seleccionado que serán procesadas
+  const totalNotasSeleccionado = selectedReport
+    ? selectedReport.subjects
+        .filter((s) => !s.isConceptual && s.cursoAsignaturaId)
+        .reduce((acc, s) => acc + s.notasPeriodo1.length, 0)
+    : 0;
 
   // Helper para badge de estado de nota
   const renderGradeStatusBadge = (status: GradePositionStatus) => {
@@ -584,14 +765,14 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800 border border-blue-200">
-                  <span>Etapa 19D — Detección de Evaluaciones y Notas Existentes (Solo Lectura)</span>
+                  <span>Etapa 19E — Importación Real de Notas Históricas (RPC UTP)</span>
                 </div>
                 <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
-                  Detección de Evaluaciones y Comparación de Calificaciones
+                  Importador de Calificaciones Históricas desde PDF
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Compara cada nota numérica del Periodo 1 con las evaluaciones y notas registradas en Supabase.
-                  Determina notas nuevas, duplicadas, conflictos y evaluaciones faltantes sin modificar la base de datos.
+                  Inserta notas numéricas del Periodo 1 mediante procedimiento seguro en Supabase.
+                  Crea automáticamente evaluaciones históricas faltantes, omite duplicados y protege notas existentes.
                 </p>
               </div>
 
@@ -599,7 +780,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                 <button
                   type="button"
                   onClick={handleClearReports}
-                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 cursor-pointer"
                 >
                   Limpiar lista
                 </button>
@@ -637,7 +818,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   {isProcessing ? "Procesando y consultando Supabase..." : "Seleccionar o arrastrar informes PDF aquí"}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Consultas SELECT con usuario autenticado UTP. No se ejecutan inserciones ni modificaciones.
+                  Consultas y transacciones autenticadas con permisos UTP. Las calificaciones históricas quedan auditadas.
                 </p>
               </label>
             </div>
@@ -667,7 +848,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   Revisar
                 </span>
                 <p className="mt-2 text-2xl font-bold text-amber-700">{totalRevisar}</p>
-                <p className="mt-1 text-xs text-amber-600">Conflictos, cursos o asignaturas pendientes</p>
+                <p className="mt-1 text-xs text-amber-600">Conflictos o asignaturas pendientes</p>
               </div>
 
               <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
@@ -707,7 +888,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                           key={`${rep.fileName}-${idx}`}
                           type="button"
                           onClick={() => setSelectedReportIndex(idx)}
-                          className={`w-full text-left p-3.5 transition flex flex-col gap-1.5 ${
+                          className={`w-full text-left p-3.5 transition flex flex-col gap-1.5 cursor-pointer ${
                             isSelected
                               ? "bg-blue-50/60 border-l-4 border-blue-600"
                               : "hover:bg-zinc-50"
@@ -777,6 +958,28 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
               <div className="lg:col-span-8">
                 {selectedReport ? (
                   <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                    {/* Alerta de error si ocurrió al intentar importar */}
+                    {importErrorMessage && (
+                      <div className="mb-5 rounded-xl border border-red-300 bg-red-50 p-4 text-xs text-red-900 flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2">
+                          <svg className="h-5 w-5 text-red-600 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                          </svg>
+                          <div>
+                            <p className="font-bold text-red-800">No se pudo completar la importación:</p>
+                            <p className="mt-1 text-red-700 leading-relaxed">{importErrorMessage}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setImportErrorMessage(null)}
+                          className="text-red-600 hover:text-red-800 font-bold text-sm cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
                     {/* Tarjeta de Encabezado de Validación */}
                     <div className="border-b border-zinc-200 pb-5">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -871,7 +1074,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                         </div>
                       </div>
 
-                      {/* Resumen de Notas y Evaluaciones por Estudiante (Requisito 8) */}
+                      {/* Resumen de Notas y Evaluaciones por Estudiante */}
                       <div className="mt-4">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
                           Resumen de Calificaciones y Evaluaciones del Estudiante
@@ -904,24 +1107,32 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                           </div>
 
                           {/* Conflictos */}
-                          <div className={`rounded-xl border p-3 ${
-                            selectedReport.notasConflictosCount > 0
-                              ? "border-red-300 bg-red-50/80"
-                              : "border-zinc-200 bg-zinc-50/50"
-                          }`}>
-                            <span className={`text-[11px] font-bold uppercase ${
-                              selectedReport.notasConflictosCount > 0 ? "text-red-800" : "text-zinc-600"
-                            }`}>
+                          <div
+                            className={`rounded-xl border p-3 ${
+                              selectedReport.notasConflictosCount > 0
+                                ? "border-red-300 bg-red-50/80"
+                                : "border-zinc-200 bg-zinc-50/50"
+                            }`}
+                          >
+                            <span
+                              className={`text-[11px] font-bold uppercase ${
+                                selectedReport.notasConflictosCount > 0 ? "text-red-800" : "text-zinc-600"
+                              }`}
+                            >
                               Conflictos
                             </span>
-                            <p className={`mt-1 text-xl font-extrabold ${
-                              selectedReport.notasConflictosCount > 0 ? "text-red-700" : "text-zinc-700"
-                            }`}>
+                            <p
+                              className={`mt-1 text-xl font-extrabold ${
+                                selectedReport.notasConflictosCount > 0 ? "text-red-700" : "text-zinc-700"
+                              }`}
+                            >
                               {selectedReport.notasConflictosCount}
                             </p>
-                            <p className={`mt-0.5 text-[10px] ${
-                              selectedReport.notasConflictosCount > 0 ? "text-red-600" : "text-zinc-500"
-                            }`}>
+                            <p
+                              className={`mt-0.5 text-[10px] ${
+                                selectedReport.notasConflictosCount > 0 ? "text-red-600" : "text-zinc-500"
+                              }`}
+                            >
                               Existe calificación pero con valor diferente
                             </p>
                           </div>
@@ -962,7 +1173,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                         <div className="space-y-3">
                           {selectedReport.subjects.map((sub, sIdx) => {
                             const subKey = `${selectedReport.fileName}-${sub.asignaturaPdf}-${sIdx}`;
-                            const isExpanded = expandedSubjects[subKey] ?? true; // abiertas por defecto para inspección clara
+                            const isExpanded = expandedSubjects[subKey] ?? true;
 
                             return (
                               <div
@@ -1078,7 +1289,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                       <button
                                         type="button"
                                         onClick={() => toggleSubjectExpansion(subKey)}
-                                        className="ml-2 inline-flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100"
+                                        className="ml-2 inline-flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 cursor-pointer"
                                       >
                                         <span>{isExpanded ? "Ocultar" : "Ver"} desglose</span>
                                         <svg
@@ -1096,7 +1307,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                   </div>
                                 </div>
 
-                                {/* Desglose detallado por Posición (Requisitos 3, 4, 5, 6) */}
+                                {/* Desglose detallado por Posición */}
                                 {sub.gradesAnalysis.length > 0 && isExpanded && (
                                   <div className="border-t border-zinc-100 bg-zinc-50/70 p-3">
                                     <div className="overflow-x-auto">
@@ -1194,37 +1405,47 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                       )}
                     </div>
 
-                    {/* Botón de Importación (Requisito 10) */}
+                    {/* Zona de Acción: Botón de Importación Real (Etapa 19E) */}
                     <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                       <div className="text-xs text-zinc-600">
                         <p className="font-semibold text-zinc-900">Estado de Importación Histórica:</p>
                         <p className="mt-0.5">
                           {selectedReport.overallStatus === "LISTO_PARA_IMPORTAR"
-                            ? "El estudiante, curso y asignaturas están 100% verificados sin conflictos. Listo para importar en la siguiente etapa."
+                            ? `Listo para importar: se ingresarán las ${totalNotasSeleccionado} notas del Periodo 1. Las calificaciones existentes no serán modificadas.`
                             : selectedReport.overallStatus === "DUPLICADO"
-                            ? "Todas las notas del informe ya existen en el sistema con valores idénticos."
+                            ? "Todas las notas del informe ya se encuentran registradas en Supabase con valores idénticos."
                             : selectedReport.overallStatus === "REVISAR"
-                            ? "Existen observaciones, asignaturas pendientes o conflictos de notas que deben atenderse antes de importar."
+                            ? "Existen discrepancias, asignaturas manuales pendientes o conflictos de notas que deben atenderse antes de importar."
                             : "El informe presenta errores estructurales que impiden su procesamiento."}
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-300 px-5 py-2.5 text-xs font-bold text-zinc-600 shadow-none cursor-not-allowed opacity-80 shrink-0"
-                        title="Importación no disponible en esta etapa"
-                      >
-                        <svg className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                          />
-                        </svg>
-                        Importación disponible en siguiente etapa
-                      </button>
+                      {selectedReport.overallStatus === "LISTO_PARA_IMPORTAR" ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmModalOpen(true)}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition cursor-pointer shrink-0"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Confirmar e importar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-200 px-5 py-2.5 text-xs font-bold text-zinc-500 shadow-none cursor-not-allowed opacity-80 shrink-0"
+                          title="Solo disponible cuando el informe se encuentre en estado LISTO PARA IMPORTAR"
+                        >
+                          <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          {selectedReport.overallStatus === "DUPLICADO"
+                            ? "Notas ya importadas"
+                            : "Importación no disponible"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1232,6 +1453,174 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                     Seleccione un informe de la lista para ver su cruce con Supabase.
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Confirmación Previo a la Importación (Requisito 8) */}
+          {isConfirmModalOpen && selectedReport && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-emerald-100 p-2.5 text-emerald-700">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-zinc-900">
+                      Confirmar Importación Histórica
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Acción protegida para usuario UTP autenticado
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-xs text-emerald-950">
+                  <p className="font-semibold text-emerald-900 text-sm">
+                    Se importarán {totalNotasSeleccionado} notas del Periodo 1.
+                  </p>
+                  <p className="mt-1 text-emerald-800">
+                    Las notas existentes no serán modificadas. Se crearán evaluaciones históricas para los órdenes faltantes y la acción quedará registrada en la auditoría.
+                  </p>
+                </div>
+
+                <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-xs border border-zinc-200 text-zinc-700 space-y-1">
+                  <p>
+                    <strong className="text-zinc-900">Estudiante:</strong>{" "}
+                    {selectedReport.systemStudent
+                      ? `${selectedReport.systemStudent.nombres} ${selectedReport.systemStudent.apellidos}`
+                      : selectedReport.estudiantePdf}
+                  </p>
+                  <p>
+                    <strong className="text-zinc-900">Curso:</strong> {selectedReport.systemCourse?.nombre || selectedReport.cursoPdf}
+                  </p>
+                  <p>
+                    <strong className="text-zinc-900">RUN:</strong> {selectedReport.rawRunPdf}
+                  </p>
+                  <p>
+                    <strong className="text-zinc-900">Evaluaciones faltantes a crear:</strong>{" "}
+                    <span className="font-bold text-amber-700">{selectedReport.evaluacionesFaltantesCount}</span>
+                  </p>
+                  <p>
+                    <strong className="text-zinc-900">Notas nuevas a insertar:</strong>{" "}
+                    <span className="font-bold text-emerald-700">{selectedReport.notasNuevasCount}</span>
+                  </p>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3 border-t border-zinc-100 pt-4">
+                  <button
+                    type="button"
+                    disabled={isImporting}
+                    onClick={() => setIsConfirmModalOpen(false)}
+                    className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isImporting}
+                    onClick={handleExecuteImport}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer disabled:opacity-50"
+                  >
+                    {isImporting ? (
+                      <>
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
+                        Importando en Supabase...
+                      </>
+                    ) : (
+                      "Confirmar e importar"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Resultado de la Importación (Requisito 9) */}
+          {isResultModalOpen && importResult && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-blue-100 p-2.5 text-blue-700">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-zinc-900">
+                      Resumen de Importación de Calificaciones
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Operación procesada por la función RPC en Supabase
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 text-center">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase block">Insertadas</span>
+                    <span className="mt-1 text-2xl font-extrabold text-emerald-700 block">
+                      {importResult.insertadas}
+                    </span>
+                    <span className="text-[10px] text-emerald-600">Nuevas en sistema</span>
+                  </div>
+
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-center">
+                    <span className="text-[10px] font-bold text-blue-800 uppercase block">Duplicadas</span>
+                    <span className="mt-1 text-2xl font-extrabold text-blue-700 block">
+                      {importResult.duplicadas}
+                    </span>
+                    <span className="text-[10px] text-blue-600">Omitidas (idénticas)</span>
+                  </div>
+
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-center">
+                    <span className="text-[10px] font-bold text-amber-800 uppercase block">Eval. Creadas</span>
+                    <span className="mt-1 text-2xl font-extrabold text-amber-700 block">
+                      {importResult.evaluaciones_creadas}
+                    </span>
+                    <span className="text-[10px] text-amber-600">Históricas P1</span>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center">
+                    <span className="text-[10px] font-bold text-zinc-700 uppercase block">Conflictos</span>
+                    <span className="mt-1 text-2xl font-extrabold text-zinc-700 block">
+                      {importResult.conflictos}
+                    </span>
+                    <span className="text-[10px] text-zinc-500">Protegidas</span>
+                  </div>
+                </div>
+
+                {importResult.errores && importResult.errores.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs">
+                    <p className="font-bold text-red-800">Errores puntuales reportados ({importResult.errores.length}):</p>
+                    <ul className="mt-1 max-h-32 overflow-y-auto space-y-1 text-red-700 list-disc list-inside">
+                      {importResult.errores.map((errItem, idx) => (
+                        <li key={idx}>
+                          Orden {errItem.orden}: {errItem.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <p className="mt-4 text-xs text-zinc-500">
+                  La validación ha sido refrescada. Las notas insertadas se visualizan ahora como duplicadas garantizando consistencia total.
+                </p>
+
+                <div className="mt-6 flex justify-end border-t border-zinc-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResultModalOpen(false);
+                      setImportResult(null);
+                    }}
+                    className="rounded-lg bg-blue-900 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-800 transition cursor-pointer"
+                  >
+                    Entendido
+                  </button>
+                </div>
               </div>
             </div>
           )}
