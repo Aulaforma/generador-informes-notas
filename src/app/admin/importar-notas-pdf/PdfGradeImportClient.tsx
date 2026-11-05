@@ -20,6 +20,7 @@ import {
   computeGradesAnalysis,
   computeOverallPdfStatus,
   GradePositionStatus,
+  PeriodSummary,
 } from "@/utils/pdfCrossValidation";
 
 interface PdfGradeImportClientProps {
@@ -34,11 +35,20 @@ interface ImportRpcResult {
   errores: Array<{
     estudiante_id?: string;
     curso_asignatura_id?: string;
+    periodo?: number;
     orden?: string;
     nota?: string;
     error: string;
   }>;
 }
+
+const emptyPeriodSummary: PeriodSummary = {
+  nuevasCount: 0,
+  duplicadasCount: 0,
+  conflictosCount: 0,
+  evaluacionesFaltantesCount: 0,
+  totalNotas: 0,
+};
 
 export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps) {
   const { profile, isLoading: authLoading } = useAuth();
@@ -54,7 +64,9 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados de la importación real (Etapa 19E)
+  // Estados de la importación (Etapa 19F)
+  const [importP1, setImportP1] = useState(true);
+  const [importP2, setImportP2] = useState(true);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportRpcResult | null>(null);
@@ -74,7 +86,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
     fileName: string,
     fileSize: number
   ): Promise<ValidatedPdfReport> => {
-    // 1. Extraer datos con el parser de PDF
+    // 1. Extraer datos con el parser de PDF (Periodo 1 y Periodo 2)
     const parsed = await parsePdfGrades(fileBuffer, fileName, fileSize);
 
     if (parsed.status === "PDF_SIN_TEXTO") {
@@ -96,10 +108,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         subjects: [],
         availableCourseSubjects: [],
         totalNotasPeriodo1: 0,
+        totalNotasPeriodo2: 0,
         notasNuevasCount: 0,
         notasDuplicadasCount: 0,
         notasConflictosCount: 0,
         evaluacionesFaltantesCount: 0,
+        p1Summary: { ...emptyPeriodSummary },
+        p2Summary: { ...emptyPeriodSummary },
       };
     }
 
@@ -122,10 +137,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         subjects: [],
         availableCourseSubjects: [],
         totalNotasPeriodo1: 0,
+        totalNotasPeriodo2: 0,
         notasNuevasCount: 0,
         notasDuplicadasCount: 0,
         notasConflictosCount: 0,
         evaluacionesFaltantesCount: 0,
+        p1Summary: { ...emptyPeriodSummary },
+        p2Summary: { ...emptyPeriodSummary },
       };
     }
 
@@ -181,6 +199,10 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         return {
           asignaturaPdf: asig.asignatura,
           notasPeriodo1: asig.notasPeriodo1,
+          notasPeriodo2: asig.notasPeriodo2,
+          promedioP1: asig.promedioP1,
+          promedioP2: asig.promedioP2,
+          promedioFinal: asig.promedioFinal,
           promedioInformado: asig.promedioInformado,
           isConceptual: true,
           conceptualNotas: asig.conceptualNotas,
@@ -189,6 +211,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           asignaturaSistemaNombre: null,
           status: "CONCEPTUAL_OMITIDA",
           statusMessage: "Conceptual — omitida en esta etapa",
+          gradesAnalysisP1: [],
+          gradesAnalysisP2: [],
           gradesAnalysis: [],
         };
       }
@@ -198,6 +222,10 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         return {
           asignaturaPdf: asig.asignatura,
           notasPeriodo1: asig.notasPeriodo1,
+          notasPeriodo2: asig.notasPeriodo2,
+          promedioP1: asig.promedioP1,
+          promedioP2: asig.promedioP2,
+          promedioFinal: asig.promedioFinal,
           promedioInformado: asig.promedioInformado,
           isConceptual: false,
           cursoAsignaturaId: null,
@@ -205,6 +233,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           asignaturaSistemaNombre: null,
           status: "MANUAL",
           statusMessage: "Curso sin asignaturas asociadas o estudiante no vinculado",
+          gradesAnalysisP1: [],
+          gradesAnalysisP2: [],
           gradesAnalysis: [],
         };
       }
@@ -215,6 +245,10 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         return {
           asignaturaPdf: asig.asignatura,
           notasPeriodo1: asig.notasPeriodo1,
+          notasPeriodo2: asig.notasPeriodo2,
+          promedioP1: asig.promedioP1,
+          promedioP2: asig.promedioP2,
+          promedioFinal: asig.promedioFinal,
           promedioInformado: asig.promedioInformado,
           isConceptual: false,
           cursoAsignaturaId: match.matchedSubject.id,
@@ -222,15 +256,20 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           asignaturaSistemaNombre: match.matchedSubject.asignaturas.nombre,
           status: "VINCULADA",
           statusMessage: "Vinculación exacta",
+          gradesAnalysisP1: [],
+          gradesAnalysisP2: [],
           gradesAnalysis: [],
         };
       }
 
       if (match.isSuggested && match.matchedSubject) {
-        // Sugerencia encontrada, preseleccionamos pero permitimos cambio
         return {
           asignaturaPdf: asig.asignatura,
           notasPeriodo1: asig.notasPeriodo1,
+          notasPeriodo2: asig.notasPeriodo2,
+          promedioP1: asig.promedioP1,
+          promedioP2: asig.promedioP2,
+          promedioFinal: asig.promedioFinal,
           promedioInformado: asig.promedioInformado,
           isConceptual: false,
           cursoAsignaturaId: match.matchedSubject.id,
@@ -239,6 +278,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           status: "VINCULADA",
           statusMessage: `Sugerida por alias (${match.matchedSubject.asignaturas.nombre})`,
           sugerenciaId: match.matchedSubject.id,
+          gradesAnalysisP1: [],
+          gradesAnalysisP2: [],
           gradesAnalysis: [],
         };
       }
@@ -246,6 +287,10 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       return {
         asignaturaPdf: asig.asignatura,
         notasPeriodo1: asig.notasPeriodo1,
+        notasPeriodo2: asig.notasPeriodo2,
+        promedioP1: asig.promedioP1,
+        promedioP2: asig.promedioP2,
+        promedioFinal: asig.promedioFinal,
         promedioInformado: asig.promedioInformado,
         isConceptual: false,
         cursoAsignaturaId: null,
@@ -253,11 +298,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         asignaturaSistemaNombre: null,
         status: "MANUAL",
         statusMessage: "Requiere selección manual",
+        gradesAnalysisP1: [],
+        gradesAnalysisP2: [],
         gradesAnalysis: [],
       };
     });
 
-    // 6. Consultar evaluaciones existentes y calificaciones del estudiante (SELECT únicamente)
+    // 6. Consultar evaluaciones existentes (periodos 1 y 2) y calificaciones del estudiante
     const linkedCaIds = comparisonSubjects
       .map((s) => s.cursoAsignaturaId)
       .filter((id): id is number => id !== null);
@@ -271,7 +318,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           .from("evaluaciones")
           .select("id, curso_asignatura_id, nombre, orden, periodo")
           .in("curso_asignatura_id", linkedCaIds)
-          .eq("periodo", 1)
+          .in("periodo", [1, 2])
           .order("orden", { ascending: true });
 
         if (!evErr && evData) {
@@ -295,7 +342,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       }
     }
 
-    // 7. Cruzar posiciones de notas del PDF con evaluaciones y calificaciones
+    // 7. Cruzar posiciones de notas del PDF con evaluaciones y calificaciones para P1 y P2
     const gradesAnalysisResult = computeGradesAnalysis(
       comparisonSubjects,
       evaluaciones,
@@ -333,10 +380,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       subjects: gradesAnalysisResult.updatedSubjects,
       availableCourseSubjects,
       totalNotasPeriodo1: parsed.totalNotasPeriodo1,
+      totalNotasPeriodo2: parsed.totalNotasPeriodo2,
       notasNuevasCount: gradesAnalysisResult.notasNuevasCount,
       notasDuplicadasCount: gradesAnalysisResult.notasDuplicadasCount,
       notasConflictosCount: gradesAnalysisResult.notasConflictosCount,
       evaluacionesFaltantesCount: gradesAnalysisResult.evaluacionesFaltantesCount,
+      p1Summary: gradesAnalysisResult.p1Summary,
+      p2Summary: gradesAnalysisResult.p2Summary,
     };
   };
 
@@ -358,7 +408,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           .from("evaluaciones")
           .select("id, curso_asignatura_id, nombre, orden, periodo")
           .in("curso_asignatura_id", linkedCaIds)
-          .eq("periodo", 1)
+          .in("periodo", [1, 2])
           .order("orden", { ascending: true });
 
         if (!evErr && evData) {
@@ -409,6 +459,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       notasDuplicadasCount: gradesAnalysisResult.notasDuplicadasCount,
       notasConflictosCount: gradesAnalysisResult.notasConflictosCount,
       evaluacionesFaltantesCount: gradesAnalysisResult.evaluacionesFaltantesCount,
+      p1Summary: gradesAnalysisResult.p1Summary,
+      p2Summary: gradesAnalysisResult.p2Summary,
     };
 
     setReports((prev) => {
@@ -454,10 +506,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           subjects: [],
           availableCourseSubjects: [],
           totalNotasPeriodo1: 0,
+          totalNotasPeriodo2: 0,
           notasNuevasCount: 0,
           notasDuplicadasCount: 0,
           notasConflictosCount: 0,
           evaluacionesFaltantesCount: 0,
+          p1Summary: { ...emptyPeriodSummary },
+          p2Summary: { ...emptyPeriodSummary },
         });
       }
     }
@@ -492,6 +547,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         asignaturaSistemaNombre: selectedCourseSubject.asignaturas.nombre,
         status: "VINCULADA",
         statusMessage: "Vinculación manual UTP",
+        gradesAnalysisP1: [],
+        gradesAnalysisP2: [],
         gradesAnalysis: [],
       };
     } else {
@@ -502,6 +559,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
         asignaturaSistemaNombre: null,
         status: "MANUAL",
         statusMessage: "Requiere selección manual",
+        gradesAnalysisP1: [],
+        gradesAnalysisP2: [],
         gradesAnalysis: [],
       };
     }
@@ -520,7 +579,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           .from("evaluaciones")
           .select("id, curso_asignatura_id, nombre, orden, periodo")
           .in("curso_asignatura_id", linkedCaIds)
-          .eq("periodo", 1)
+          .in("periodo", [1, 2])
           .order("orden", { ascending: true });
 
         if (!evErr && evData) {
@@ -571,6 +630,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       notasDuplicadasCount: gradesAnalysisResult.notasDuplicadasCount,
       notasConflictosCount: gradesAnalysisResult.notasConflictosCount,
       evaluacionesFaltantesCount: gradesAnalysisResult.evaluacionesFaltantesCount,
+      p1Summary: gradesAnalysisResult.p1Summary,
+      p2Summary: gradesAnalysisResult.p2Summary,
     };
 
     const newReportsList = [...reports];
@@ -578,7 +639,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
     setReports(newReportsList);
   };
 
-  // Ejecutar importación real en Supabase (Etapa 19E)
+  // Ejecutar importación real en Supabase (Etapa 19F)
   const handleExecuteImport = async () => {
     if (selectedReportIndex === null || !reports[selectedReportIndex]) return;
     const report = reports[selectedReportIndex];
@@ -587,10 +648,15 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       return;
     }
 
+    if (!importP1 && !importP2) {
+      setImportErrorMessage("Debe seleccionar al menos un semestre a importar (1° Semestre o 2° Semestre).");
+      return;
+    }
+
     setIsImporting(true);
     setImportErrorMessage(null);
 
-    // Preparar el lote de notas validadas para el estudiante
+    // Preparar el lote de notas validadas según semestres seleccionados
     const notasLote: Array<{
       estudiante_id: number;
       curso_asignatura_id: number;
@@ -601,19 +667,41 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
     }> = [];
 
     report.subjects.forEach((sub) => {
-      if (!sub.isConceptual && sub.cursoAsignaturaId && sub.notasPeriodo1.length > 0) {
-        sub.notasPeriodo1.forEach((gradeVal, idx) => {
-          notasLote.push({
-            estudiante_id: report.systemStudent!.id,
-            curso_asignatura_id: sub.cursoAsignaturaId!,
-            periodo: 1,
-            orden: idx + 1,
-            nota: Number(gradeVal.toFixed(1)),
-            nombre_evaluacion: `Nota histórica ${idx + 1}`,
+      if (!sub.isConceptual && sub.cursoAsignaturaId) {
+        // Notas del Periodo 1
+        if (importP1 && sub.notasPeriodo1.length > 0) {
+          sub.notasPeriodo1.forEach((gradeVal, idx) => {
+            notasLote.push({
+              estudiante_id: report.systemStudent!.id,
+              curso_asignatura_id: sub.cursoAsignaturaId!,
+              periodo: 1,
+              orden: idx + 1,
+              nota: Number(gradeVal.toFixed(1)),
+              nombre_evaluacion: `Nota histórica ${idx + 1}`,
+            });
           });
-        });
+        }
+        // Notas del Periodo 2
+        if (importP2 && sub.notasPeriodo2.length > 0) {
+          sub.notasPeriodo2.forEach((gradeVal, idx) => {
+            notasLote.push({
+              estudiante_id: report.systemStudent!.id,
+              curso_asignatura_id: sub.cursoAsignaturaId!,
+              periodo: 2,
+              orden: idx + 1,
+              nota: Number(gradeVal.toFixed(1)),
+              nombre_evaluacion: `Nota histórica ${idx + 1}`,
+            });
+          });
+        }
       }
     });
+
+    if (notasLote.length === 0) {
+      setImportErrorMessage("No hay notas numéricas para importar en los semestres seleccionados.");
+      setIsImporting(false);
+      return;
+    }
 
     try {
       // Invocación a la función RPC con el cliente autenticado UTP
@@ -628,7 +716,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
           error.code === "42883";
 
         const detailedMsg = isRpcMissing
-          ? "La función RPC 'importar_notas_historicas_pdf' aún no ha sido creada en Supabase. Por favor ejecute el script SQL generado en 'supabase/importar_notas_historicas_pdf.sql' a través del SQL Editor de Supabase."
+          ? "La función RPC 'importar_notas_historicas_pdf' aún no ha sido creada o actualizada en Supabase. Por favor ejecute el script SQL generado en 'supabase/importar_notas_historicas_pdf.sql' a través del SQL Editor de Supabase."
           : `Error devuelto por Supabase: ${error.message}`;
 
         setImportErrorMessage(detailedMsg);
@@ -641,7 +729,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
       setIsConfirmModalOpen(false);
       setIsResultModalOpen(true);
 
-      // Refrescar validación inmediatamente contra la base de datos (Requisito 10)
+      // Refrescar validación inmediatamente contra la base de datos
       await refreshReportValidation(selectedReportIndex);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error desconocido durante la importación.";
@@ -701,18 +789,28 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
   const selectedReport =
     selectedReportIndex !== null && reports[selectedReportIndex] ? reports[selectedReportIndex] : null;
 
-  const totalNotasGlobal = reports.reduce((acc, r) => acc + r.totalNotasPeriodo1, 0);
+  const totalNotasP1Global = reports.reduce((acc, r) => acc + r.totalNotasPeriodo1, 0);
+  const totalNotasP2Global = reports.reduce((acc, r) => acc + r.totalNotasPeriodo2, 0);
+  const totalNotasGlobal = totalNotasP1Global + totalNotasP2Global;
   const totalListos = reports.filter((r) => r.overallStatus === "LISTO_PARA_IMPORTAR").length;
   const totalRevisar = reports.filter((r) => r.overallStatus === "REVISAR").length;
   const totalDuplicados = reports.filter((r) => r.overallStatus === "DUPLICADO").length;
   const totalErrores = reports.filter((r) => r.overallStatus === "ERROR" || r.overallStatus === "PDF_SIN_TEXTO").length;
 
-  // Total de notas numéricas del reporte seleccionado que serán procesadas
-  const totalNotasSeleccionado = selectedReport
+  // Conteo de notas por semestre para el reporte seleccionado
+  const notasP1Count = selectedReport
     ? selectedReport.subjects
         .filter((s) => !s.isConceptual && s.cursoAsignaturaId)
         .reduce((acc, s) => acc + s.notasPeriodo1.length, 0)
     : 0;
+
+  const notasP2Count = selectedReport
+    ? selectedReport.subjects
+        .filter((s) => !s.isConceptual && s.cursoAsignaturaId)
+        .reduce((acc, s) => acc + s.notasPeriodo2.length, 0)
+    : 0;
+
+  const totalNotasSeleccionadas = (importP1 ? notasP1Count : 0) + (importP2 ? notasP2Count : 0);
 
   // Helper para badge de estado de nota
   const renderGradeStatusBadge = (status: GradePositionStatus) => {
@@ -765,14 +863,14 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800 border border-blue-200">
-                  <span>Etapa 19E — Importación Real de Notas Históricas (RPC UTP)</span>
+                  <span>Etapa 19F — Importación PDF Periodo 1 y Periodo 2 (RPC UTP)</span>
                 </div>
                 <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
                   Importador de Calificaciones Históricas desde PDF
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Inserta notas numéricas del Periodo 1 mediante procedimiento seguro en Supabase.
-                  Crea automáticamente evaluaciones históricas faltantes, omite duplicados y protege notas existentes.
+                  Detecta, valida e importa notas numéricas del 1° y 2° Semestre mediante procedimiento seguro en Supabase.
+                  Permite seleccionar qué semestres importar, omite duplicados y no modifica notas existentes.
                 </p>
               </div>
 
@@ -818,7 +916,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   {isProcessing ? "Procesando y consultando Supabase..." : "Seleccionar o arrastrar informes PDF aquí"}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Consultas y transacciones autenticadas con permisos UTP. Las calificaciones históricas quedan auditadas.
+                  Detecta notas numéricas de ambos semestres. Los promedios y notas conceptuales permanecen únicamente como validación.
                 </p>
               </label>
             </div>
@@ -832,7 +930,9 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   Total Informes
                 </span>
                 <p className="mt-2 text-2xl font-bold text-zinc-900">{reports.length}</p>
-                <p className="mt-1 text-xs text-zinc-500">{totalNotasGlobal} notas P1 detectadas</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {totalNotasGlobal} notas (P1: {totalNotasP1Global}, P2: {totalNotasP2Global})
+                </p>
               </div>
 
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
@@ -928,22 +1028,23 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                             </p>
                           </div>
 
-                          {/* Mini resumen de notas por estudiante */}
+                          {/* Mini resumen de notas por semestre */}
                           <div className="mt-1 flex flex-wrap gap-1 text-[10px] border-t border-zinc-100 pt-1.5 font-medium">
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-800 border border-blue-200 font-bold">
+                              P1: {rep.totalNotasPeriodo1}
+                            </span>
+                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-800 border border-indigo-200 font-bold">
+                              P2: {rep.totalNotasPeriodo2}
+                            </span>
                             <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 border border-emerald-100">
                               Nuevas: {rep.notasNuevasCount}
                             </span>
-                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 border border-blue-100">
-                              Duplicadas: {rep.notasDuplicadasCount}
+                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-700 border border-zinc-200">
+                              Dup: {rep.notasDuplicadasCount}
                             </span>
                             {rep.notasConflictosCount > 0 && (
                               <span className="rounded bg-red-50 px-1.5 py-0.5 text-red-700 border border-red-200 font-bold">
-                                Conflictos: {rep.notasConflictosCount}
-                              </span>
-                            )}
-                            {rep.evaluacionesFaltantesCount > 0 && (
-                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 border border-amber-200">
-                                Faltantes: {rep.evaluacionesFaltantesCount}
+                                Conf: {rep.notasConflictosCount}
                               </span>
                             )}
                           </div>
@@ -985,7 +1086,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-                            Resultado de Detección de Evaluaciones y Calificaciones
+                            Resultado de Detección Semestres 1 y 2
                           </span>
                           <h3 className="mt-1 text-xl font-bold text-zinc-900">
                             {selectedReport.systemStudent
@@ -1074,95 +1175,136 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                         </div>
                       </div>
 
-                      {/* Resumen de Notas y Evaluaciones por Estudiante */}
-                      <div className="mt-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
-                          Resumen de Calificaciones y Evaluaciones del Estudiante
-                        </span>
-                        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                          {/* Notas Nuevas */}
-                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-                            <span className="text-[11px] font-bold text-emerald-800 uppercase">
-                              Notas Nuevas
-                            </span>
-                            <p className="mt-1 text-xl font-extrabold text-emerald-700">
-                              {selectedReport.notasNuevasCount}
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-emerald-600">
-                              No existe calificación y puede importarse
-                            </p>
-                          </div>
+                      {/* Resumen por Semestre (Periodo 1 y Periodo 2) y Total General (Requisito 5) */}
+                      <div className="mt-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                            Resumen de Calificaciones por Semestre
+                          </span>
+                          <span className="text-xs text-zinc-500 font-medium">
+                            Total general informado: <strong className="text-zinc-800">{selectedReport.totalNotasPeriodo1 + selectedReport.totalNotasPeriodo2} notas</strong>
+                          </span>
+                        </div>
 
-                          {/* Notas Duplicadas */}
-                          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
-                            <span className="text-[11px] font-bold text-blue-800 uppercase">
-                              Duplicadas
+                        {/* Bloque Periodo 1 */}
+                        <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-blue-600 inline-block"></span>
+                              1° Semestre (P1) — {selectedReport.totalNotasPeriodo1} notas detectadas
                             </span>
-                            <p className="mt-1 text-xl font-extrabold text-blue-700">
-                              {selectedReport.notasDuplicadasCount}
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-blue-600">
-                              Existe calificación con exactamente el mismo valor
-                            </p>
                           </div>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+                            <div className="rounded-lg bg-white p-2 border border-blue-100 shadow-2xs">
+                              <span className="text-[10px] text-emerald-700 font-bold uppercase block">Nuevas</span>
+                              <span className="text-lg font-extrabold text-emerald-700">{selectedReport.p1Summary.nuevasCount}</span>
+                              <span className="text-[9px] text-emerald-600 block">Listas para insertar</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-blue-100 shadow-2xs">
+                              <span className="text-[10px] text-blue-700 font-bold uppercase block">Duplicadas</span>
+                              <span className="text-lg font-extrabold text-blue-700">{selectedReport.p1Summary.duplicadasCount}</span>
+                              <span className="text-[9px] text-blue-600 block">Ya registradas</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-blue-100 shadow-2xs">
+                              <span className="text-[10px] text-red-700 font-bold uppercase block">Conflictos</span>
+                              <span className="text-lg font-extrabold text-red-700">{selectedReport.p1Summary.conflictosCount}</span>
+                              <span className="text-[9px] text-red-600 block">Valores diferentes</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-blue-100 shadow-2xs">
+                              <span className="text-[10px] text-amber-700 font-bold uppercase block">Eval. Faltantes</span>
+                              <span className="text-lg font-extrabold text-amber-700">{selectedReport.p1Summary.evaluacionesFaltantesCount}</span>
+                              <span className="text-[9px] text-amber-600 block">A crear en P1</span>
+                            </div>
+                          </div>
+                        </div>
 
-                          {/* Conflictos */}
+                        {/* Bloque Periodo 2 */}
+                        <div className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-indigo-600 inline-block"></span>
+                              2° Semestre (P2) — {selectedReport.totalNotasPeriodo2} notas detectadas
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+                            <div className="rounded-lg bg-white p-2 border border-indigo-100 shadow-2xs">
+                              <span className="text-[10px] text-emerald-700 font-bold uppercase block">Nuevas</span>
+                              <span className="text-lg font-extrabold text-emerald-700">{selectedReport.p2Summary.nuevasCount}</span>
+                              <span className="text-[9px] text-emerald-600 block">Listas para insertar</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-indigo-100 shadow-2xs">
+                              <span className="text-[10px] text-blue-700 font-bold uppercase block">Duplicadas</span>
+                              <span className="text-lg font-extrabold text-blue-700">{selectedReport.p2Summary.duplicadasCount}</span>
+                              <span className="text-[9px] text-blue-600 block">Ya registradas</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-indigo-100 shadow-2xs">
+                              <span className="text-[10px] text-red-700 font-bold uppercase block">Conflictos</span>
+                              <span className="text-lg font-extrabold text-red-700">{selectedReport.p2Summary.conflictosCount}</span>
+                              <span className="text-[9px] text-red-600 block">Valores diferentes</span>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 border border-indigo-100 shadow-2xs">
+                              <span className="text-[10px] text-amber-700 font-bold uppercase block">Eval. Faltantes</span>
+                              <span className="text-lg font-extrabold text-amber-700">{selectedReport.p2Summary.evaluacionesFaltantesCount}</span>
+                              <span className="text-[9px] text-amber-600 block">A crear en P2</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bloque Total General */}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs pt-1">
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5">
+                            <span className="text-[10px] font-bold text-emerald-800 uppercase block">Total Nuevas</span>
+                            <span className="text-xl font-extrabold text-emerald-700">{selectedReport.notasNuevasCount}</span>
+                          </div>
+                          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-2.5">
+                            <span className="text-[10px] font-bold text-blue-800 uppercase block">Total Duplicadas</span>
+                            <span className="text-xl font-extrabold text-blue-700">{selectedReport.notasDuplicadasCount}</span>
+                          </div>
                           <div
-                            className={`rounded-xl border p-3 ${
+                            className={`rounded-xl border p-2.5 ${
                               selectedReport.notasConflictosCount > 0
                                 ? "border-red-300 bg-red-50/80"
-                                : "border-zinc-200 bg-zinc-50/50"
+                                : "border-zinc-200 bg-zinc-50"
                             }`}
                           >
                             <span
-                              className={`text-[11px] font-bold uppercase ${
+                              className={`text-[10px] font-bold uppercase block ${
                                 selectedReport.notasConflictosCount > 0 ? "text-red-800" : "text-zinc-600"
                               }`}
                             >
-                              Conflictos
+                              Total Conflictos
                             </span>
-                            <p
-                              className={`mt-1 text-xl font-extrabold ${
+                            <span
+                              className={`text-xl font-extrabold ${
                                 selectedReport.notasConflictosCount > 0 ? "text-red-700" : "text-zinc-700"
                               }`}
                             >
                               {selectedReport.notasConflictosCount}
-                            </p>
-                            <p
-                              className={`mt-0.5 text-[10px] ${
-                                selectedReport.notasConflictosCount > 0 ? "text-red-600" : "text-zinc-500"
-                              }`}
-                            >
-                              Existe calificación pero con valor diferente
-                            </p>
-                          </div>
-
-                          {/* Evaluaciones Faltantes */}
-                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
-                            <span className="text-[11px] font-bold text-amber-800 uppercase">
-                              Eval. Faltantes
                             </span>
-                            <p className="mt-1 text-xl font-extrabold text-amber-700">
-                              {selectedReport.evaluacionesFaltantesCount}
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-amber-600">
-                              Orden sin evaluación (se creará histórica al importar)
-                            </p>
+                          </div>
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-2.5">
+                            <span className="text-[10px] font-bold text-amber-800 uppercase block">Total Eval. Faltantes</span>
+                            <span className="text-xl font-extrabold text-amber-700">{selectedReport.evaluacionesFaltantesCount}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Tabla de Asignaturas y Detección por Posición */}
+                    {/* Vista Previa Detallada por Asignatura (Requisito 3) */}
                     <div className="mt-6">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-bold text-zinc-900">
                           Detalle por Asignatura y Evaluaciones ({selectedReport.subjects.length})
                         </h4>
-                        <span className="text-xs text-zinc-500">
-                          Total notas P1:{" "}
-                          <strong className="text-emerald-700">{selectedReport.totalNotasPeriodo1}</strong>
-                        </span>
+                        <div className="flex items-center gap-3 text-xs text-zinc-500">
+                          <span>
+                            P1: <strong className="text-blue-700">{selectedReport.totalNotasPeriodo1} notas</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            P2: <strong className="text-indigo-700">{selectedReport.totalNotasPeriodo2} notas</strong>
+                          </span>
+                        </div>
                       </div>
 
                       {selectedReport.subjects.length === 0 ? (
@@ -1189,9 +1331,9 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                 }`}
                               >
                                 {/* Fila Principal de la Asignatura */}
-                                <div className="p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <div className="p-3.5 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <h5 className="text-xs font-bold text-zinc-900">
                                         {sub.asignaturaPdf}
                                       </h5>
@@ -1208,6 +1350,12 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                       {!sub.isConceptual && sub.status === "MANUAL" && (
                                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                                           Manual
+                                        </span>
+                                      )}
+                                      {/* Promedio Final: solo informativo (Requisito 3) */}
+                                      {sub.promedioFinal !== null && (
+                                        <span className="rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] font-semibold text-purple-700" title="Promedio final calculado en PDF — No se importa como calificación">
+                                          Promedio Final: {sub.promedioFinal.toFixed(1).replace(".", ",")} (informativo)
                                         </span>
                                       )}
                                     </div>
@@ -1243,16 +1391,24 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                     </div>
                                   </div>
 
-                                  {/* Resumen de Notas y Promedio */}
+                                  {/* Resumen Periodo 1 y Periodo 2 (Requisito 3) */}
                                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                                    <div>
-                                      <span className="text-[10px] text-zinc-400 block">Notas PDF P1:</span>
-                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {/* 1° Semestre */}
+                                    <div className="rounded-lg bg-blue-50/60 border border-blue-200/70 p-2 min-w-[130px]">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-bold text-blue-900 uppercase">1° Semestre</span>
+                                        {sub.promedioP1 !== null && (
+                                          <span className="text-[10px] text-blue-700 font-mono font-bold" title="Promedio informado P1 (solo validación)">
+                                            Prom: {sub.promedioP1.toFixed(1).replace(".", ",")}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 mt-1">
                                         {sub.notasPeriodo1.length > 0 ? (
                                           sub.notasPeriodo1.map((n, nIdx) => (
                                             <span
                                               key={nIdx}
-                                              className="inline-flex items-center rounded bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 font-mono text-[11px] font-bold text-zinc-800"
+                                              className="inline-flex items-center rounded bg-white border border-blue-200 px-1.5 py-0.5 font-mono text-[11px] font-bold text-blue-900"
                                             >
                                               {n.toFixed(1).replace(".", ",")}
                                             </span>
@@ -1261,7 +1417,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                           sub.conceptualNotas?.map((c, cIdx) => (
                                             <span
                                               key={cIdx}
-                                              className="inline-flex items-center rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600"
+                                              className="inline-flex items-center rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 border border-zinc-200"
                                             >
                                               {c}
                                             </span>
@@ -1272,16 +1428,30 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                       </div>
                                     </div>
 
-                                    {/* Promedio PDF (solo validación) */}
-                                    <div className="text-right min-w-[70px] border-l border-zinc-200 pl-3">
-                                      <span className="text-[10px] text-zinc-400 block" title="Dato exclusivo de validación">
-                                        Promedio PDF
-                                      </span>
-                                      <span className="font-mono font-bold text-zinc-700 text-xs">
-                                        {sub.promedioInformado !== null
-                                          ? sub.promedioInformado.toFixed(1).replace(".", ",")
-                                          : "—"}
-                                      </span>
+                                    {/* 2° Semestre */}
+                                    <div className="rounded-lg bg-indigo-50/60 border border-indigo-200/70 p-2 min-w-[130px]">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-bold text-indigo-900 uppercase">2° Semestre</span>
+                                        {sub.promedioP2 !== null && (
+                                          <span className="text-[10px] text-indigo-700 font-mono font-bold" title="Promedio informado P2 (solo validación)">
+                                            Prom: {sub.promedioP2.toFixed(1).replace(".", ",")}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {sub.notasPeriodo2.length > 0 ? (
+                                          sub.notasPeriodo2.map((n, nIdx) => (
+                                            <span
+                                              key={nIdx}
+                                              className="inline-flex items-center rounded bg-white border border-indigo-200 px-1.5 py-0.5 font-mono text-[11px] font-bold text-indigo-900"
+                                            >
+                                              {n.toFixed(1).replace(".", ",")}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="text-zinc-400 italic text-[11px]">Sin notas</span>
+                                        )}
+                                      </div>
                                     </div>
 
                                     {/* Botón para colapsar/expandir desglose */}
@@ -1289,7 +1459,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                       <button
                                         type="button"
                                         onClick={() => toggleSubjectExpansion(subKey)}
-                                        className="ml-2 inline-flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+                                        className="ml-1 inline-flex items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100 cursor-pointer self-center"
                                       >
                                         <span>{isExpanded ? "Ocultar" : "Ver"} desglose</span>
                                         <svg
@@ -1307,95 +1477,184 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                                   </div>
                                 </div>
 
-                                {/* Desglose detallado por Posición */}
+                                {/* Desglose detallado por Periodo (Requisito 3) */}
                                 {sub.gradesAnalysis.length > 0 && isExpanded && (
-                                  <div className="border-t border-zinc-100 bg-zinc-50/70 p-3">
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full text-left text-xs">
-                                        <thead>
-                                          <tr className="border-b border-zinc-200 text-[10px] font-bold uppercase text-zinc-500">
-                                            <th className="pb-1.5 pl-1">Posición PDF</th>
-                                            <th className="pb-1.5">Nota PDF</th>
-                                            <th className="pb-1.5">Evaluación Supabase</th>
-                                            <th className="pb-1.5 text-center">Orden</th>
-                                            <th className="pb-1.5 text-center">Calificación Sistema</th>
-                                            <th className="pb-1.5">Estado</th>
-                                            <th className="pb-1.5">Detalle</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-200/50">
-                                          {sub.gradesAnalysis.map((gItem) => (
-                                            <tr
-                                              key={gItem.posicion}
-                                              className={
-                                                gItem.status === "CONFLICTO"
-                                                  ? "bg-red-50/40"
-                                                  : gItem.status === "DUPLICADO"
-                                                  ? "bg-blue-50/20"
-                                                  : gItem.status === "NUEVA"
-                                                  ? "bg-emerald-50/20"
-                                                  : "bg-amber-50/20"
-                                              }
-                                            >
-                                              {/* Posición PDF */}
-                                              <td className="py-2 pl-1 font-semibold text-zinc-800">
-                                                Nota {gItem.posicion}
-                                              </td>
+                                  <div className="border-t border-zinc-100 bg-zinc-50/70 p-3 space-y-3">
+                                    {/* Tabla 1° Semestre */}
+                                    {sub.gradesAnalysisP1 && sub.gradesAnalysisP1.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-[11px] font-bold text-blue-900 uppercase flex items-center gap-1">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-600 inline-block"></span>
+                                            1° Semestre (P1)
+                                          </span>
+                                          {sub.promedioP1 !== null && (
+                                            <span className="text-[11px] text-zinc-500">
+                                              Promedio informado P1: <strong className="text-zinc-800">{sub.promedioP1.toFixed(1).replace(".", ",")}</strong> (solo validación)
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                                          <table className="w-full text-left text-xs">
+                                            <thead>
+                                              <tr className="border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold uppercase text-zinc-500">
+                                                <th className="py-1.5 pl-2">Posición PDF</th>
+                                                <th className="py-1.5">Nota PDF</th>
+                                                <th className="py-1.5">Evaluación Supabase</th>
+                                                <th className="py-1.5 text-center">Orden</th>
+                                                <th className="py-1.5 text-center">Calificación Sistema</th>
+                                                <th className="py-1.5">Estado</th>
+                                                <th className="py-1.5 pr-2">Detalle</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-200/50">
+                                              {sub.gradesAnalysisP1.map((gItem) => (
+                                                <tr
+                                                  key={`p1-${gItem.posicion}`}
+                                                  className={
+                                                    gItem.status === "CONFLICTO"
+                                                      ? "bg-red-50/40"
+                                                      : gItem.status === "DUPLICADO"
+                                                      ? "bg-blue-50/20"
+                                                      : gItem.status === "NUEVA"
+                                                      ? "bg-emerald-50/20"
+                                                      : "bg-amber-50/20"
+                                                  }
+                                                >
+                                                  <td className="py-1.5 pl-2 font-semibold text-zinc-800">
+                                                    Nota {gItem.posicion}
+                                                  </td>
+                                                  <td className="py-1.5 font-mono font-bold text-zinc-900">
+                                                    {gItem.notaPdf.toFixed(1).replace(".", ",")}
+                                                  </td>
+                                                  <td className="py-1.5 text-zinc-700">
+                                                    {gItem.evaluacionExistenteNombre ? (
+                                                      <span className="font-medium text-zinc-900">
+                                                        {gItem.evaluacionExistenteNombre}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-zinc-400 italic">
+                                                        — Sin evaluación —
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-1.5 text-center font-mono font-medium text-zinc-600">
+                                                    orden {gItem.orden}
+                                                  </td>
+                                                  <td className="py-1.5 text-center font-mono font-semibold">
+                                                    {gItem.calificacionExistenteValor !== null ? (
+                                                      <span
+                                                        className={
+                                                          gItem.status === "CONFLICTO"
+                                                            ? "text-red-700 font-bold"
+                                                            : "text-zinc-800"
+                                                        }
+                                                      >
+                                                        {gItem.calificacionExistenteValor.toFixed(1).replace(".", ",")}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-zinc-400 font-normal italic">—</span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-1.5">{renderGradeStatusBadge(gItem.status)}</td>
+                                                  <td className="py-1.5 pr-2 text-[11px] text-zinc-500">
+                                                    {gItem.statusMessage}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
 
-                                              {/* Nota PDF */}
-                                              <td className="py-2 font-mono font-bold text-zinc-900">
-                                                {gItem.notaPdf.toFixed(1).replace(".", ",")}
-                                              </td>
-
-                                              {/* Evaluación Existente */}
-                                              <td className="py-2 text-zinc-700">
-                                                {gItem.evaluacionExistenteNombre ? (
-                                                  <span className="font-medium text-zinc-900">
-                                                    {gItem.evaluacionExistenteNombre}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-zinc-400 italic">
-                                                    — Sin evaluación —
-                                                  </span>
-                                                )}
-                                              </td>
-
-                                              {/* Orden */}
-                                              <td className="py-2 text-center font-mono font-medium text-zinc-600">
-                                                orden {gItem.orden}
-                                              </td>
-
-                                              {/* Calificación Existente */}
-                                              <td className="py-2 text-center font-mono font-semibold">
-                                                {gItem.calificacionExistenteValor !== null ? (
-                                                  <span
-                                                    className={
-                                                      gItem.status === "CONFLICTO"
-                                                        ? "text-red-700 font-bold"
-                                                        : "text-zinc-800"
-                                                    }
-                                                  >
-                                                    {gItem.calificacionExistenteValor.toFixed(1).replace(".", ",")}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-zinc-400 font-normal italic">—</span>
-                                                )}
-                                              </td>
-
-                                              {/* Estado */}
-                                              <td className="py-2">
-                                                {renderGradeStatusBadge(gItem.status)}
-                                              </td>
-
-                                              {/* Detalle */}
-                                              <td className="py-2 text-[11px] text-zinc-500">
-                                                {gItem.statusMessage}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
+                                    {/* Tabla 2° Semestre */}
+                                    {sub.gradesAnalysisP2 && sub.gradesAnalysisP2.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-[11px] font-bold text-indigo-900 uppercase flex items-center gap-1">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 inline-block"></span>
+                                            2° Semestre (P2)
+                                          </span>
+                                          {sub.promedioP2 !== null && (
+                                            <span className="text-[11px] text-zinc-500">
+                                              Promedio informado P2: <strong className="text-zinc-800">{sub.promedioP2.toFixed(1).replace(".", ",")}</strong> (solo validación)
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                                          <table className="w-full text-left text-xs">
+                                            <thead>
+                                              <tr className="border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold uppercase text-zinc-500">
+                                                <th className="py-1.5 pl-2">Posición PDF</th>
+                                                <th className="py-1.5">Nota PDF</th>
+                                                <th className="py-1.5">Evaluación Supabase</th>
+                                                <th className="py-1.5 text-center">Orden</th>
+                                                <th className="py-1.5 text-center">Calificación Sistema</th>
+                                                <th className="py-1.5">Estado</th>
+                                                <th className="py-1.5 pr-2">Detalle</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-200/50">
+                                              {sub.gradesAnalysisP2.map((gItem) => (
+                                                <tr
+                                                  key={`p2-${gItem.posicion}`}
+                                                  className={
+                                                    gItem.status === "CONFLICTO"
+                                                      ? "bg-red-50/40"
+                                                      : gItem.status === "DUPLICADO"
+                                                      ? "bg-blue-50/20"
+                                                      : gItem.status === "NUEVA"
+                                                      ? "bg-emerald-50/20"
+                                                      : "bg-amber-50/20"
+                                                  }
+                                                >
+                                                  <td className="py-1.5 pl-2 font-semibold text-zinc-800">
+                                                    Nota {gItem.posicion}
+                                                  </td>
+                                                  <td className="py-1.5 font-mono font-bold text-zinc-900">
+                                                    {gItem.notaPdf.toFixed(1).replace(".", ",")}
+                                                  </td>
+                                                  <td className="py-1.5 text-zinc-700">
+                                                    {gItem.evaluacionExistenteNombre ? (
+                                                      <span className="font-medium text-zinc-900">
+                                                        {gItem.evaluacionExistenteNombre}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-zinc-400 italic">
+                                                        — Sin evaluación —
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-1.5 text-center font-mono font-medium text-zinc-600">
+                                                    orden {gItem.orden}
+                                                  </td>
+                                                  <td className="py-1.5 text-center font-mono font-semibold">
+                                                    {gItem.calificacionExistenteValor !== null ? (
+                                                      <span
+                                                        className={
+                                                          gItem.status === "CONFLICTO"
+                                                            ? "text-red-700 font-bold"
+                                                            : "text-zinc-800"
+                                                        }
+                                                      >
+                                                        {gItem.calificacionExistenteValor.toFixed(1).replace(".", ",")}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-zinc-400 font-normal italic">—</span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-1.5">{renderGradeStatusBadge(gItem.status)}</td>
+                                                  <td className="py-1.5 pr-2 text-[11px] text-zinc-500">
+                                                    {gItem.statusMessage}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -1405,13 +1664,13 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                       )}
                     </div>
 
-                    {/* Zona de Acción: Botón de Importación Real (Etapa 19E) */}
+                    {/* Zona de Acción: Botón de Importación Real */}
                     <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                       <div className="text-xs text-zinc-600">
                         <p className="font-semibold text-zinc-900">Estado de Importación Histórica:</p>
                         <p className="mt-0.5">
                           {selectedReport.overallStatus === "LISTO_PARA_IMPORTAR"
-                            ? `Listo para importar: se ingresarán las ${totalNotasSeleccionado} notas del Periodo 1. Las calificaciones existentes no serán modificadas.`
+                            ? `Listo para importar: se ingresarán ${notasP1Count} notas de P1 y ${notasP2Count} notas de P2. Las calificaciones existentes no serán modificadas.`
                             : selectedReport.overallStatus === "DUPLICADO"
                             ? "Todas las notas del informe ya se encuentran registradas en Supabase con valores idénticos."
                             : selectedReport.overallStatus === "REVISAR"
@@ -1457,7 +1716,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
             </div>
           )}
 
-          {/* Modal de Confirmación Previo a la Importación (Requisito 8) */}
+          {/* Modal de Confirmación Previo a la Importación (Requisitos 10 y 11) */}
           {isConfirmModalOpen && selectedReport && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
               <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200">
@@ -1477,15 +1736,63 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-xs text-emerald-950">
-                  <p className="font-semibold text-emerald-900 text-sm">
-                    Se importarán {totalNotasSeleccionado} notas del Periodo 1.
+                {/* Texto exacto según Requisito 10 */}
+                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 text-xs text-emerald-950">
+                  <p className="font-bold text-emerald-900 text-sm">
+                    Se importarán:
                   </p>
-                  <p className="mt-1 text-emerald-800">
-                    Las notas existentes no serán modificadas. Se crearán evaluaciones históricas para los órdenes faltantes y la acción quedará registrada en la auditoría.
+                  <p className="mt-1 font-semibold text-emerald-900">
+                    {importP1 ? notasP1Count : 0} notas del 1° Semestre
+                  </p>
+                  <p className="font-semibold text-emerald-900">
+                    {importP2 ? notasP2Count : 0} notas del 2° Semestre
+                  </p>
+                  <p className="mt-2 text-emerald-800 font-medium">
+                    Las notas existentes no serán modificadas.
                   </p>
                 </div>
 
+                {/* Opciones de Selección con Checkboxes (Requisito 11) */}
+                <div className="mt-4 rounded-xl bg-zinc-50 p-3.5 border border-zinc-200 space-y-2.5">
+                  <span className="text-xs font-bold text-zinc-800 block">
+                    Seleccionar periodos a importar:
+                  </span>
+                  <div className="space-y-2 text-xs">
+                    <label className="flex items-center gap-2.5 cursor-pointer font-medium text-zinc-800">
+                      <input
+                        type="checkbox"
+                        checked={importP1}
+                        onChange={(e) => setImportP1(e.target.checked)}
+                        className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>
+                        Importar 1° Semestre{" "}
+                        <strong className="text-blue-700">({notasP1Count} notas)</strong>
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer font-medium text-zinc-800">
+                      <input
+                        type="checkbox"
+                        checked={importP2}
+                        onChange={(e) => setImportP2(e.target.checked)}
+                        className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>
+                        Importar 2° Semestre{" "}
+                        <strong className="text-indigo-700">({notasP2Count} notas)</strong>
+                      </span>
+                    </label>
+                  </div>
+
+                  {!importP1 && !importP2 && (
+                    <p className="text-[11px] font-semibold text-red-600 mt-1">
+                      ⚠️ Debe marcar al menos un semestre para poder importar.
+                    </p>
+                  )}
+                </div>
+
+                {/* Datos del estudiante */}
                 <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-xs border border-zinc-200 text-zinc-700 space-y-1">
                   <p>
                     <strong className="text-zinc-900">Estudiante:</strong>{" "}
@@ -1500,12 +1807,8 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                     <strong className="text-zinc-900">RUN:</strong> {selectedReport.rawRunPdf}
                   </p>
                   <p>
-                    <strong className="text-zinc-900">Evaluaciones faltantes a crear:</strong>{" "}
-                    <span className="font-bold text-amber-700">{selectedReport.evaluacionesFaltantesCount}</span>
-                  </p>
-                  <p>
-                    <strong className="text-zinc-900">Notas nuevas a insertar:</strong>{" "}
-                    <span className="font-bold text-emerald-700">{selectedReport.notasNuevasCount}</span>
+                    <strong className="text-zinc-900">Total a procesar en lote:</strong>{" "}
+                    <span className="font-bold text-zinc-900">{totalNotasSeleccionadas} calificaciones</span>
                   </p>
                 </div>
 
@@ -1520,7 +1823,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                   </button>
                   <button
                     type="button"
-                    disabled={isImporting}
+                    disabled={isImporting || (!importP1 && !importP2) || totalNotasSeleccionadas === 0}
                     onClick={handleExecuteImport}
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer disabled:opacity-50"
                   >
@@ -1530,7 +1833,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                         Importando en Supabase...
                       </>
                     ) : (
-                      "Confirmar e importar"
+                      `Confirmar e importar (${totalNotasSeleccionadas})`
                     )}
                   </button>
                 </div>
@@ -1538,7 +1841,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
             </div>
           )}
 
-          {/* Modal de Resultado de la Importación (Requisito 9) */}
+          {/* Modal de Resultado de la Importación */}
           {isResultModalOpen && importResult && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
               <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200">
@@ -1580,7 +1883,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                     <span className="mt-1 text-2xl font-extrabold text-amber-700 block">
                       {importResult.evaluaciones_creadas}
                     </span>
-                    <span className="text-[10px] text-amber-600">Históricas P1</span>
+                    <span className="text-[10px] text-amber-600">Históricas P1/P2</span>
                   </div>
 
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center">
@@ -1598,7 +1901,7 @@ export function PdfGradeImportClient({ institution }: PdfGradeImportClientProps)
                     <ul className="mt-1 max-h-32 overflow-y-auto space-y-1 text-red-700 list-disc list-inside">
                       {importResult.errores.map((errItem, idx) => (
                         <li key={idx}>
-                          Orden {errItem.orden}: {errItem.error}
+                          P{errItem.periodo || "?"} Orden {errItem.orden}: {errItem.error}
                         </li>
                       ))}
                     </ul>

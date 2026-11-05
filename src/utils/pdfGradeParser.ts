@@ -2,21 +2,25 @@
  * pdfGradeParser.ts
  * Parser para extracción y previsualización de notas históricas desde informes en formato PDF (texto digital, no OCR).
  *
- * Soporta dos formatos comunes:
- * 1. Formato Informe de Rendimiento Escolar / Anual (columnas Periodo 1, Periodo 2, Examen Final, Promedio).
- * 2. Formato Libreta de Notas individual/consolidada (cuadrícula N1-N10 / asignaturas).
+ * Soporta formatos:
+ * 1. Formato Informe Anual / Rendimiento Escolar (columnas Periodo 1, Periodo 2, Examen Final, Promedio).
+ * 2. Formato Informe Parcial de Notas / Libreta de Notas (cuadrícula N1-N15 / Periodo 1).
  *
  * Filtros estrictos:
- * - Importa únicamente calificaciones NUMÉRICAS de Periodo 1 (1.0 a 7.0).
+ * - Importa únicamente calificaciones NUMÉRICAS de Periodo 1 y Periodo 2 (1.0 a 7.0).
  * - Detecta calificaciones conceptuales (MB, B, S, I) y las marca informativamente sin agregarlas a notas numéricas.
- * - Extrae el promedio informado solo como dato de validación (NO lo agrega como una nota más).
- * - No importa Periodo 2, asistencia, observaciones ni firmas.
+ * - Extrae los promedios informados (P1, P2 y Final) exclusivamente como datos de validación (NO los agrega como notas parciales).
+ * - No importa asistencia, observaciones, firmas ni exámenes finales como notas parciales.
  */
 
 export interface ParsedSubjectGrade {
   asignatura: string;
   notasPeriodo1: number[];
-  promedioInformado: number | null;
+  notasPeriodo2: number[];
+  promedioP1: number | null;
+  promedioP2: number | null;
+  promedioFinal: number | null;
+  promedioInformado: number | null; // Retrocompatibilidad (equivale a promedioP1)
   isConceptual: boolean;
   conceptualNotas?: string[];
   advertencia?: string;
@@ -37,6 +41,7 @@ export interface ParsedPdfReport {
   cursoNormalizado: string;
   asignaturas: ParsedSubjectGrade[];
   totalNotasPeriodo1: number;
+  totalNotasPeriodo2: number;
   totalAsignaturas: number;
 }
 
@@ -92,7 +97,22 @@ interface TextItemInfo {
 }
 
 /**
- * Procesa el ArrayBuffer de un PDF y extrae las notas del Periodo 1.
+ * Parsea una cadena de texto a valor numérico de nota escolar chilena (1.0 a 7.0).
+ * Retorna null si es inválido, vacío o guión.
+ */
+function parseGradeNumber(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const clean = raw.trim().replace(",", ".");
+  if (clean === "-" || clean === "" || clean === "NaN") return null;
+  const num = parseFloat(clean);
+  if (!isNaN(num) && num >= 1.0 && num <= 7.0) {
+    return Number(num.toFixed(1));
+  }
+  return null;
+}
+
+/**
+ * Procesa el ArrayBuffer de un PDF y extrae las notas de Periodo 1 y Periodo 2.
  */
 export async function parsePdfGrades(
   fileBuffer: ArrayBuffer,
@@ -131,6 +151,7 @@ export async function parsePdfGrades(
         cursoNormalizado: "",
         asignaturas: [],
         totalNotasPeriodo1: 0,
+        totalNotasPeriodo2: 0,
         totalAsignaturas: 0,
       };
     }
@@ -139,11 +160,16 @@ export async function parsePdfGrades(
     const page = await pdf.getPage(1);
     const textContent = await page.getTextContent();
 
-    const items: TextItemInfo[] = (textContent.items as any[])
+    // Extraer items de texto con sus coordenadas
+    const rawItems: Array<{ str?: string; transform?: number[] }> = textContent.items as Array<{
+      str?: string;
+      transform?: number[];
+    }>;
+    const items: TextItemInfo[] = rawItems
       .map((it) => ({
         str: (it.str || "").trim(),
-        x: Math.round(it.transform[4]),
-        y: Math.round(it.transform[5]),
+        x: Math.round(it.transform ? it.transform[4] : 0),
+        y: Math.round(it.transform ? it.transform[5] : 0),
       }))
       .filter((it) => it.str.length > 0);
 
@@ -161,6 +187,7 @@ export async function parsePdfGrades(
         cursoNormalizado: "",
         asignaturas: [],
         totalNotasPeriodo1: 0,
+        totalNotasPeriodo2: 0,
         totalAsignaturas: 0,
       };
     }
@@ -217,11 +244,11 @@ export async function parsePdfGrades(
     }
     const cursoNormalizado = normalizeCourseName(curso);
 
-    // 4. Extracción de Asignaturas y Calificaciones del Periodo 1
+    // 4. Extracción de Asignaturas y Calificaciones de Periodo 1 y Periodo 2
     // Agrupamos textos en filas horizontales basadas en coordenada Y
     const rowMap: { [yKey: number]: TextItemInfo[] } = {};
     for (const it of items) {
-      // Filtrar cabeceras y pies de página
+      // Filtrar cabeceras superiores y pies de página
       if (it.y > 520 || it.y < 120) continue;
       const yKey = Math.round(it.y / 4) * 4;
       if (!rowMap[yKey]) rowMap[yKey] = [];
@@ -231,18 +258,19 @@ export async function parsePdfGrades(
     const sortedY = Object.keys(rowMap).map(Number).sort((a, b) => b - a);
     const parsedSubjects: ParsedSubjectGrade[] = [];
 
-    // Detectar si el formato es tipo "Informe Anual" con columnas (Periodo 1 notas en x aprox 130 a 390)
-    // o tipo "Libreta de Notas" (notas en x aprox 330 a 530)
-    const hasP1Header = fullText.includes("Periodo 1") || fullText.includes("Primer Semestre");
+    // Detectar si el formato es Informe Anual (columnas separadas Periodo 1 y Periodo 2)
+    const isAnual = items.some(
+      (i) => i.str.includes("Periodo 1") || i.str.includes("Periodo 2")
+    );
 
     for (const y of sortedY) {
       const row = rowMap[y];
       row.sort((a, b) => a.x - b.x);
 
-      // Descartar encabezados de tabla o líneas de promedio general / observaciones / firmas / metadatos
+      // Descartar encabezados de tabla, líneas de resumen, observaciones o firmas
       const rowCombined = row.map((i) => i.str).join(" ");
       if (
-        /PROMEDIO GENERAL|OBSERVACIONES|Porcentaje asistencia|Asignaturas|DOCENTE|EVALUACIONES|Nombre y firma|Nombre Alumno|RUT:|Curso:|Periodo 1|Periodo 2|Año académico|Ex\.Final|Director|profesor\(a\)|^-{5,}$/i.test(
+        /PROMEDIO GENERAL|OBSERVACIONES|Porcentaje asistencia|Asignaturas|DOCENTE|EVALUACIONES|Nombre y firma|Nombre Alumno|RUT:|Curso:|Periodo 1|Periodo 2|Año académico|Ex\.Final|Director|profesor\(a\)|Promedio del periodo|Anotaciones|^-{5,}$/i.test(
           rowCombined
         ) ||
         rowCombined.includes("----------------")
@@ -250,7 +278,7 @@ export async function parsePdfGrades(
         continue;
       }
 
-      // Si la fila no contiene ninguna nota numérica ni conceptual ni promedio, y se ubica abajo (y < 160), es firma de personas
+      // Descartar líneas aisladas de pie de página
       const hasAnyGradeOrConcept = row.some(
         (i) => /^(MB|B|S|I)$/i.test(i.str) || /^[1-7][,\.][0-9]$/.test(i.str)
       );
@@ -258,9 +286,39 @@ export async function parsePdfGrades(
         continue;
       }
 
-      // El nombre de la asignatura suele estar al extremo izquierdo (x < 150)
-      const nameParts = row.filter((i) => i.x < 140).map((i) => i.str);
+      let nameParts: TextItemInfo[] = [];
+      let p1Items: TextItemInfo[] = [];
+      let promP1Item: TextItemInfo | undefined;
+      let p2Items: TextItemInfo[] = [];
+      let promP2Item: TextItemInfo | undefined;
+      let promFinalItem: TextItemInfo | undefined;
+
+      if (isAnual) {
+        // En formato Informe Anual:
+        // - Asignatura: x < 140
+        // - Periodo 1 notas: x >= 140 && x < 390
+        // - Periodo 1 promedio (Final P1): x >= 390 && x < 415
+        // - Periodo 2 notas: x >= 415 && x < 670
+        // - Periodo 2 promedio (Final P2): x >= 670 && x < 695
+        // - Promedio final: x >= 710 && x < 770
+        nameParts = row.filter((i) => i.x < 140);
+        p1Items = row.filter((i) => i.x >= 140 && i.x < 390);
+        promP1Item = row.find((i) => i.x >= 390 && i.x < 415);
+        p2Items = row.filter((i) => i.x >= 415 && i.x < 670);
+        promP2Item = row.find((i) => i.x >= 670 && i.x < 695);
+        promFinalItem = row.find((i) => i.x >= 710 && i.x < 770);
+      } else {
+        // En formato Informe Parcial (solo Periodo 1):
+        // - Asignatura: x < 200
+        // - Periodo 1 notas: x >= 200 && x < 530
+        // - Periodo 1 promedio: x >= 530 && x < 560
+        nameParts = row.filter((i) => i.x < 200);
+        p1Items = row.filter((i) => i.x >= 200 && i.x < 530);
+        promP1Item = row.find((i) => i.x >= 530 && i.x < 560);
+      }
+
       const asigName = nameParts
+        .map((i) => i.str)
         .join(" ")
         .replace(/^\*\s*/, "") // Quitar asteriscos de notas no incidentes
         .trim();
@@ -272,46 +330,44 @@ export async function parsePdfGrades(
       const isConceptual = conceptualMatches.length > 0;
 
       // Extraer notas de Periodo 1
-      // En el formato informe anual:
-      // - Las notas parciales de Periodo 1 se ubican entre x >= 140 y x < 390
-      // - El promedio informado de Periodo 1 está en la columna Final P1 (x >= 390 y x < 415)
-      const p1Items = row.filter((i) => i.x >= 140 && i.x < 390);
       const notasP1: number[] = [];
-
       for (const it of p1Items) {
-        // Puede venir "6.7", "6,7"
-        const cleanVal = it.str.replace(",", ".");
-        const gradeNum = parseFloat(cleanVal);
-        if (!isNaN(gradeNum) && gradeNum >= 1.0 && gradeNum <= 7.0) {
-          notasP1.push(gradeNum);
-        }
+        const val = parseGradeNumber(it.str);
+        if (val !== null) notasP1.push(val);
       }
 
-      // Promedio informado en Periodo 1
-      let promedioP1: number | null = null;
-      const promItem = row.find((i) => i.x >= 390 && i.x < 415);
-      if (promItem) {
-        const pNum = parseFloat(promItem.str.replace(",", "."));
-        if (!isNaN(pNum) && pNum >= 1.0 && pNum <= 7.0) {
-          promedioP1 = pNum;
-        }
+      // Extraer notas de Periodo 2
+      const notasP2: number[] = [];
+      for (const it of p2Items) {
+        const val = parseGradeNumber(it.str);
+        if (val !== null) notasP2.push(val);
       }
+
+      // Promedios informados exclusivamente como validación
+      const promedioP1 = parseGradeNumber(promP1Item?.str);
+      const promedioP2 = parseGradeNumber(promP2Item?.str);
+      const promedioFinal = parseGradeNumber(promFinalItem?.str);
 
       parsedSubjects.push({
         asignatura: asigName,
         notasPeriodo1: notasP1,
+        notasPeriodo2: notasP2,
+        promedioP1,
+        promedioP2,
+        promedioFinal,
         promedioInformado: promedioP1,
         isConceptual,
         conceptualNotas: isConceptual ? conceptualMatches.map((m) => m.str) : undefined,
         advertencia: isConceptual
           ? "Conceptual — no importada en esta etapa"
-          : notasP1.length === 0
-          ? "Sin notas en Periodo 1"
+          : notasP1.length === 0 && notasP2.length === 0
+          ? "Sin notas en Periodo 1 ni Periodo 2"
           : undefined,
       });
     }
 
-    const totalNotas = parsedSubjects.reduce((acc, s) => acc + s.notasPeriodo1.length, 0);
+    const totalNotasP1 = parsedSubjects.reduce((acc, s) => acc + s.notasPeriodo1.length, 0);
+    const totalNotasP2 = parsedSubjects.reduce((acc, s) => acc + s.notasPeriodo2.length, 0);
 
     // Validación de estado de extracción
     let status: PdfReportStatus = "LEIDO";
@@ -337,7 +393,8 @@ export async function parsePdfGrades(
       curso: curso || "Curso no especificado",
       cursoNormalizado,
       asignaturas: parsedSubjects,
-      totalNotasPeriodo1: totalNotas,
+      totalNotasPeriodo1: totalNotasP1,
+      totalNotasPeriodo2: totalNotasP2,
       totalAsignaturas: parsedSubjects.length,
     };
   } catch (err: unknown) {
@@ -355,6 +412,7 @@ export async function parsePdfGrades(
       cursoNormalizado: "",
       asignaturas: [],
       totalNotasPeriodo1: 0,
+      totalNotasPeriodo2: 0,
       totalAsignaturas: 0,
     };
   }

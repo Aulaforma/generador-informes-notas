@@ -1,12 +1,13 @@
 -- ==============================================================================
--- ETAPA 19E: FUNCIÓN RPC PARA IMPORTACIÓN SEGURA DE NOTAS HISTÓRICAS DESDE PDF
+-- ETAPA 19F: FUNCIÓN RPC PARA IMPORTACIÓN SEGURA DE NOTAS HISTÓRICAS DESDE PDF
+-- (PERIODO 1 Y PERIODO 2)
 -- ==============================================================================
--- Esta función permite a usuarios con rol UTP importar calificaciones del Periodo 1
--- directamente a las tablas oficiales de Supabase (evaluaciones y calificaciones).
+-- Esta función permite a usuarios con rol UTP importar calificaciones de Periodo 1
+-- y Periodo 2 directamente a las tablas oficiales de Supabase (evaluaciones y calificaciones).
 --
 -- CARACTERÍSTICAS PRINCIPALES:
 -- 1. SECURITY DEFINER: Se ejecuta con privilegios elevados para permitir inserción
---    histórica incluso cuando el Periodo 1 se encuentre con 'cerrado = true'.
+--    histórica incluso cuando el Periodo 1 o Periodo 2 se encuentren con 'cerrado = true'.
 -- 2. search_path = public: Protegido contra ataques de secuestro de esquemas.
 -- 3. Identificación estricta de UTP: Valida que auth.uid() pertenezca a un perfil
 --    con rol = 'utp' y activo = true.
@@ -15,6 +16,7 @@
 --    'calificaciones_auditoria' con accion = 'INSERT' y el usuario_id del UTP.
 -- 5. Manejo idempotente de evaluaciones: Intenta INSERT con ON CONFLICT DO NOTHING.
 --    Si se insertó, incrementa el contador. Si ya existía, recupera el id existente.
+--    Diferencia por periodo y orden respetando UNIQUE(curso_asignatura_id, periodo, orden).
 -- 6. Detección de duplicados y conflictos: Si la calificación ya existe con el mismo
 --    valor, se omite. Si existe con valor diferente, se marca como conflicto y NO se
 --    sobrescribe.
@@ -130,9 +132,9 @@ BEGIN
         RAISE EXCEPTION 'Nota inválida (%). Debe estar en la escala de 1.0 a 7.0.', v_nota;
       END IF;
 
-      -- Validación 3: Restricción exclusiva a Periodo 1 en esta etapa
-      IF v_periodo <> 1 THEN
-        RAISE EXCEPTION 'Período no permitido (%). Solo se permite importar Periodo 1 en esta etapa.', v_periodo;
+      -- Validación 3: Restricción exclusiva a Periodo 1 y Periodo 2 (Etapa 19F)
+      IF v_periodo NOT IN (1, 2) THEN
+        RAISE EXCEPTION 'Período no permitido (%). Solo se permite importar Periodo 1 y Periodo 2.', v_periodo;
       END IF;
 
       -- Validación 4: Orden válido
@@ -183,8 +185,8 @@ BEGIN
         created_at
       ) VALUES (
         v_curso_asignatura_id,
-        v_nombre_eval,
-        1,
+        'Nota histórica ' || v_orden,
+        v_periodo,
         v_orden,
         NULL,
         NOW()
@@ -199,7 +201,7 @@ BEGIN
         INTO v_evaluacion_id
         FROM public.evaluaciones
         WHERE curso_asignatura_id = v_curso_asignatura_id
-          AND periodo = 1
+          AND periodo = v_periodo
           AND orden = v_orden;
       END IF;
 
@@ -250,6 +252,7 @@ BEGIN
       v_errores := v_errores || jsonb_build_object(
         'estudiante_id', v_item->>'estudiante_id',
         'curso_asignatura_id', v_item->>'curso_asignatura_id',
+        'periodo', v_item->>'periodo',
         'orden', v_item->>'orden',
         'nota', v_item->>'nota',
         'error', SQLERRM
@@ -278,4 +281,4 @@ REVOKE ALL ON FUNCTION public.importar_notas_historicas_pdf(JSONB) FROM anon;
 GRANT EXECUTE ON FUNCTION public.importar_notas_historicas_pdf(JSONB) TO authenticated;
 
 COMMENT ON FUNCTION public.importar_notas_historicas_pdf(JSONB) IS
-  'Importación masiva segura de calificaciones del Periodo 1 desde PDF por UTP. Crea evaluaciones históricas faltantes y audita con auth.uid().';
+  'Importación masiva segura de calificaciones de Periodo 1 y Periodo 2 desde PDF por UTP. Crea evaluaciones históricas faltantes y audita con auth.uid().';

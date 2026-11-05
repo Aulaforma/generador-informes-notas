@@ -41,6 +41,7 @@ export type GradePositionStatus = "NUEVA" | "DUPLICADO" | "CONFLICTO" | "EVALUAC
 export type OverallPdfStatus = "LISTO_PARA_IMPORTAR" | "REVISAR" | "DUPLICADO" | "ERROR" | "PDF_SIN_TEXTO";
 
 export interface GradePositionItem {
+  periodo: 1 | 2; // Etapa 19F: Periodo explícito
   posicion: number; // 1, 2, 3... (Nota 1, Nota 2)
   notaPdf: number;
   evaluacionExistenteId: number | null;
@@ -55,7 +56,11 @@ export interface GradePositionItem {
 export interface SubjectComparisonItem {
   asignaturaPdf: string;
   notasPeriodo1: number[];
-  promedioInformado: number | null;
+  notasPeriodo2: number[]; // Etapa 19F
+  promedioP1: number | null; // Etapa 19F
+  promedioP2: number | null; // Etapa 19F
+  promedioFinal: number | null; // Etapa 19F
+  promedioInformado: number | null; // Retrocompatibilidad
   isConceptual: boolean;
   conceptualNotas?: string[];
   // Datos del sistema
@@ -66,8 +71,18 @@ export interface SubjectComparisonItem {
   statusMessage: string;
   // Sugerencia
   sugerenciaId?: number | null;
-  // Detalle por posiciones de notas (Etapa 19D)
-  gradesAnalysis: GradePositionItem[];
+  // Detalle por periodo (Etapa 19F)
+  gradesAnalysisP1: GradePositionItem[];
+  gradesAnalysisP2: GradePositionItem[];
+  gradesAnalysis: GradePositionItem[]; // Combinados P1 + P2 para compatibilidad
+}
+
+export interface PeriodSummary {
+  nuevasCount: number;
+  duplicadasCount: number;
+  conflictosCount: number;
+  evaluacionesFaltantesCount: number;
+  totalNotas: number;
 }
 
 export interface ValidatedPdfReport {
@@ -95,8 +110,13 @@ export interface ValidatedPdfReport {
   subjects: SubjectComparisonItem[];
   availableCourseSubjects: SystemCourseSubject[];
   totalNotasPeriodo1: number;
+  totalNotasPeriodo2: number; // Etapa 19F
 
-  // Resumen de notas y evaluaciones (Requisito 8)
+  // Resumen por periodo (Etapa 19F)
+  p1Summary: PeriodSummary;
+  p2Summary: PeriodSummary;
+
+  // Totales generales
   notasNuevasCount: number;
   notasDuplicadasCount: number;
   notasConflictosCount: number;
@@ -264,19 +284,18 @@ export interface RawCalificacion {
 }
 
 /**
- * Cruza las notas numéricas del Periodo 1 de cada asignatura del PDF con las evaluaciones
+ * Cruza las notas numéricas de Periodo 1 y Periodo 2 de cada asignatura del PDF con las evaluaciones
  * y calificaciones existentes en Supabase para el estudiante.
  *
- * Mapeo posicional:
- * Posición 1 (Nota 1) -> orden 1
- * Posición 2 (Nota 2) -> orden 2
- * ...
+ * Mapeo posicional por periodo:
+ * - Periodo 1: Nota 1 -> periodo 1, orden 1; Nota 2 -> periodo 1, orden 2
+ * - Periodo 2: Nota 1 -> periodo 2, orden 1; Nota 2 -> periodo 2, orden 2
  *
  * Estados por nota:
  * - NUEVA: Existe evaluación pero no calificación del estudiante.
  * - DUPLICADO: Existe calificación con el mismo valor numérico.
  * - CONFLICTO: Existe calificación con valor numérico diferente.
- * - EVALUACION_FALTANTE: No existe evaluación con ese orden para curso_asignatura_id + periodo 1.
+ * - EVALUACION_FALTANTE: No existe evaluación con ese orden para curso_asignatura_id + periodo.
  */
 export function computeGradesAnalysis(
   subjects: SubjectComparisonItem[],
@@ -284,18 +303,18 @@ export function computeGradesAnalysis(
   calificaciones: RawCalificacion[]
 ): {
   updatedSubjects: SubjectComparisonItem[];
+  p1Summary: PeriodSummary;
+  p2Summary: PeriodSummary;
   notasNuevasCount: number;
   notasDuplicadasCount: number;
   notasConflictosCount: number;
   evaluacionesFaltantesCount: number;
 } {
   // Construir índices para búsqueda O(1)
-  // evalMap: "cursoAsignaturaId_orden" -> RawEvaluation
+  // evalMap: "cursoAsignaturaId_periodo_orden" -> RawEvaluation
   const evalMap = new Map<string, RawEvaluation>();
   for (const ev of evaluaciones) {
-    if (ev.periodo === 1) {
-      evalMap.set(`${ev.curso_asignatura_id}_${ev.orden}`, ev);
-    }
+    evalMap.set(`${ev.curso_asignatura_id}_${ev.periodo}_${ev.orden}`, ev);
   }
 
   // califMap: "evaluacionId" -> RawCalificacion
@@ -304,30 +323,33 @@ export function computeGradesAnalysis(
     califMap.set(cal.evaluacion_id, cal);
   }
 
-  let totalNuevas = 0;
-  let totalDuplicadas = 0;
-  let totalConflictos = 0;
-  let totalFaltantes = 0;
+  // Helper para analizar una lista de notas para un periodo específico
+  function analyzeGradeList(
+    caId: number,
+    periodo: 1 | 2,
+    gradesList: number[]
+  ): {
+    items: GradePositionItem[];
+    nuevas: number;
+    duplicadas: number;
+    conflictos: number;
+    faltantes: number;
+  } {
+    let nuevas = 0;
+    let duplicadas = 0;
+    let conflictos = 0;
+    let faltantes = 0;
 
-  const updatedSubjects = subjects.map((sub) => {
-    // Si es conceptual o no está vinculada a un curso_asignatura_id, no analizamos notas
-    if (sub.isConceptual || !sub.cursoAsignaturaId || sub.notasPeriodo1.length === 0) {
-      return {
-        ...sub,
-        gradesAnalysis: [],
-      };
-    }
-
-    const caId = sub.cursoAsignaturaId;
-    const gradesAnalysis: GradePositionItem[] = sub.notasPeriodo1.map((notaPdf, idx) => {
-      const posicion = idx + 1; // 1, 2, 3...
+    const items: GradePositionItem[] = gradesList.map((notaPdf, idx) => {
+      const posicion = idx + 1;
       const orden = posicion;
-      const key = `${caId}_${orden}`;
+      const key = `${caId}_${periodo}_${orden}`;
       const foundEval = evalMap.get(key);
 
       if (!foundEval) {
-        totalFaltantes++;
+        faltantes++;
         return {
+          periodo,
           posicion,
           notaPdf,
           evaluacionExistenteId: null,
@@ -336,18 +358,19 @@ export function computeGradesAnalysis(
           calificacionExistenteId: null,
           calificacionExistenteValor: null,
           status: "EVALUACION_FALTANTE" as GradePositionStatus,
-          statusMessage: "Evaluación faltante en sistema (se creará histórica al importar)",
+          statusMessage: `Evaluación P${periodo} orden ${orden} faltante en sistema (se creará histórica al importar)`,
         };
       }
 
-      // Evaluación existe en orden N
+      // Evaluación existe en ese orden y periodo
       const foundCalif = califMap.get(foundEval.id);
       const rawGradeVal = foundCalif?.nota;
       const hasGradeVal = rawGradeVal !== null && rawGradeVal !== undefined && rawGradeVal !== "";
 
       if (!hasGradeVal) {
-        totalNuevas++;
+        nuevas++;
         return {
+          periodo,
           posicion,
           notaPdf,
           evaluacionExistenteId: foundEval.id,
@@ -362,10 +385,11 @@ export function computeGradesAnalysis(
 
       const numCalif = typeof rawGradeVal === "number" ? rawGradeVal : parseFloat(String(rawGradeVal));
 
-      // Comparación con tolerancia a decimales (ej. 5.6 vs 5.60)
+      // Comparación con tolerancia decimal a 1 decimal
       if (Math.abs(numCalif - notaPdf) < 0.05) {
-        totalDuplicadas++;
+        duplicadas++;
         return {
+          periodo,
           posicion,
           notaPdf,
           evaluacionExistenteId: foundEval.id,
@@ -377,8 +401,9 @@ export function computeGradesAnalysis(
           statusMessage: "Existe calificación con exactamente el mismo valor",
         };
       } else {
-        totalConflictos++;
+        conflictos++;
         return {
+          periodo,
           posicion,
           notaPdf,
           evaluacionExistenteId: foundEval.id,
@@ -392,23 +417,87 @@ export function computeGradesAnalysis(
       }
     });
 
+    return { items, nuevas, duplicadas, conflictos, faltantes };
+  }
+
+  let p1NuevasTotal = 0;
+  let p1DuplicadasTotal = 0;
+  let p1ConflictosTotal = 0;
+  let p1FaltantesTotal = 0;
+  let p1NotasTotal = 0;
+
+  let p2NuevasTotal = 0;
+  let p2DuplicadasTotal = 0;
+  let p2ConflictosTotal = 0;
+  let p2FaltantesTotal = 0;
+  let p2NotasTotal = 0;
+
+  const updatedSubjects = subjects.map((sub) => {
+    // Si es conceptual o no está vinculada, no se analiza
+    if (sub.isConceptual || !sub.cursoAsignaturaId) {
+      return {
+        ...sub,
+        gradesAnalysisP1: [],
+        gradesAnalysisP2: [],
+        gradesAnalysis: [],
+      };
+    }
+
+    const caId = sub.cursoAsignaturaId;
+
+    // Análisis Periodo 1
+    const resP1 = analyzeGradeList(caId, 1, sub.notasPeriodo1);
+    p1NuevasTotal += resP1.nuevas;
+    p1DuplicadasTotal += resP1.duplicadas;
+    p1ConflictosTotal += resP1.conflictos;
+    p1FaltantesTotal += resP1.faltantes;
+    p1NotasTotal += sub.notasPeriodo1.length;
+
+    // Análisis Periodo 2
+    const resP2 = analyzeGradeList(caId, 2, sub.notasPeriodo2);
+    p2NuevasTotal += resP2.nuevas;
+    p2DuplicadasTotal += resP2.duplicadas;
+    p2ConflictosTotal += resP2.conflictos;
+    p2FaltantesTotal += resP2.faltantes;
+    p2NotasTotal += sub.notasPeriodo2.length;
+
     return {
       ...sub,
-      gradesAnalysis,
+      gradesAnalysisP1: resP1.items,
+      gradesAnalysisP2: resP2.items,
+      gradesAnalysis: [...resP1.items, ...resP2.items],
     };
   });
 
+  const p1Summary: PeriodSummary = {
+    nuevasCount: p1NuevasTotal,
+    duplicadasCount: p1DuplicadasTotal,
+    conflictosCount: p1ConflictosTotal,
+    evaluacionesFaltantesCount: p1FaltantesTotal,
+    totalNotas: p1NotasTotal,
+  };
+
+  const p2Summary: PeriodSummary = {
+    nuevasCount: p2NuevasTotal,
+    duplicadasCount: p2DuplicadasTotal,
+    conflictosCount: p2ConflictosTotal,
+    evaluacionesFaltantesCount: p2FaltantesTotal,
+    totalNotas: p2NotasTotal,
+  };
+
   return {
     updatedSubjects,
-    notasNuevasCount: totalNuevas,
-    notasDuplicadasCount: totalDuplicadas,
-    notasConflictosCount: totalConflictos,
-    evaluacionesFaltantesCount: totalFaltantes,
+    p1Summary,
+    p2Summary,
+    notasNuevasCount: p1NuevasTotal + p2NuevasTotal,
+    notasDuplicadasCount: p1DuplicadasTotal + p2DuplicadasTotal,
+    notasConflictosCount: p1ConflictosTotal + p2ConflictosTotal,
+    evaluacionesFaltantesCount: p1FaltantesTotal + p2FaltantesTotal,
   };
 }
 
 /**
- * Determina el estado general del PDF según las reglas de negocio de la Etapa 19D:
+ * Determina el estado general del PDF según las reglas de negocio:
  * - LISTO_PARA_IMPORTAR: Estudiante coincide, curso coincide, asignaturas vinculadas, sin conflictos.
  * - REVISAR: Hay conflicto de notas, asignatura requiere selección manual, o curso presenta discrepancia.
  * - DUPLICADO: Si todas las notas del PDF ya existen con el mismo valor.
@@ -461,9 +550,12 @@ export function computeOverallPdfStatus(params: {
     };
   }
 
-  // 4. Asignatura requiere selección manual
+  // 4. Asignatura requiere selección manual (con notas en P1 o P2)
   const hasUnlinkedNumericSubjects = subjects.some(
-    (s) => !s.isConceptual && s.notasPeriodo1.length > 0 && s.status === "MANUAL"
+    (s) =>
+      !s.isConceptual &&
+      (s.notasPeriodo1.length > 0 || s.notasPeriodo2.length > 0) &&
+      s.status === "MANUAL"
   );
   if (hasUnlinkedNumericSubjects) {
     return {
@@ -472,7 +564,7 @@ export function computeOverallPdfStatus(params: {
     };
   }
 
-  // 5. Conflicto de notas
+  // 5. Conflicto de notas en Periodo 1 o Periodo 2
   if (notasConflictosCount > 0) {
     return {
       overallStatus: "REVISAR",
